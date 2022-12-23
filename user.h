@@ -26,6 +26,7 @@ int sleep(int);
 int uptime(void);
 int yield(void);
 int shutdown(void);
+int schedlog(int); // Syscall Modification
 
 // ulib.c
 int stat(const char*, struct stat*);

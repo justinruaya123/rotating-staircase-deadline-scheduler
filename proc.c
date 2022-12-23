@@ -12,6 +12,10 @@ struct {
   struct proc proc[NPROC];
 } ptable;
 
+// Syscall modification
+int schedlog_active = 0;
+int schedlog_lasttick = 0;
+
 static struct proc *initproc;
 
 int nextpid = 1;
@@ -342,7 +346,33 @@ scheduler(void)
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
+      // Syscall modification
+      if (schedlog_active) {
+        if (ticks > schedlog_lasttick) {
+          schedlog_active = 0;
+        } else {
+          cprintf("%d", ticks);
 
+          struct proc *pp;
+          int highest_idx = -1;
+
+          for (int k = 0; k < NPROC; k++) {
+            pp = &ptable.proc[k];
+            if (pp->state != UNUSED) {
+              highest_idx = k;
+            }
+          }
+
+          for (int k = 0; k <= highest_idx; k++) {
+            pp = &ptable.proc[k];
+            if (pp->state == UNUSED) cprintf(" | [%d] ---:0", k);
+            else if (pp->state == RUNNING) cprintf(" | [%d]*%s:%d", k, pp->name, pp->state);
+            else cprintf(" | [%d] %s:%d", k, pp->name, pp->state); // TODO Change printing
+          }
+          cprintf("\n");
+        }
+      }
+      // ==================================
       swtch(&(c->scheduler), p->context);
       switchkvm();
 
@@ -495,6 +525,13 @@ kill(int pid)
   release(&ptable.lock);
   return -1;
 }
+
+// Syscall modification
+void schedlog(int n) {
+  schedlog_active = 1;
+  schedlog_lasttick = ticks + n;
+}
+
 
 //PAGEBREAK: 36
 // Print a process listing to console.  For debugging.
