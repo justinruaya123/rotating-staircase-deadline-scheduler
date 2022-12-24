@@ -49,6 +49,9 @@ struct proc { // TODO Add PCB states for schedlog (quantum left)
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  // Syscall Modification
+  int quantum_left;            // Quantum left for the process
 };
 
 // Process memory is laid out contiguously, low addresses first:

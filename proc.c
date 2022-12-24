@@ -12,10 +12,6 @@ struct {
   struct proc proc[NPROC];
 } ptable;
 
-// Syscall modification
-int schedlog_active = 0;
-int schedlog_lasttick = 0;
-
 static struct proc *initproc;
 
 int nextpid = 1;
@@ -315,6 +311,15 @@ wait(void)
   }
 }
 
+// Syscall modification
+int schedlog_active = 0;
+int schedlog_lasttick = 0;
+
+void schedlog(int n) {
+  schedlog_active = 1;
+  schedlog_lasttick = ticks + n;
+}
+
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -346,12 +351,15 @@ scheduler(void)
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
+
       // Syscall modification
+      p->quantum_left = RSDL_PROC_QUANTUM;
+
       if (schedlog_active) {
         if (ticks > schedlog_lasttick) {
           schedlog_active = 0;
         } else {
-          cprintf("%d", ticks);
+          cprintf("%d|active|0(0)", ticks); // <tick>|<set>|<level>(<quantum left>) for phase 1
 
           struct proc *pp;
           int highest_idx = -1;
@@ -362,12 +370,10 @@ scheduler(void)
               highest_idx = k;
             }
           }
-
+          
           for (int k = 0; k <= highest_idx; k++) {
             pp = &ptable.proc[k];
-            if (pp->state == UNUSED) cprintf(" | [%d] ---:0", k);
-            else if (pp->state == RUNNING) cprintf(" | [%d]*%s:%d", k, pp->name, pp->state);
-            else cprintf(" | [%d] %s:%d", k, pp->name, pp->state); // TODO Change printing
+            if (pp->state != UNUSED) cprintf(",[%d]%s:%d(%d)", k, pp->name, pp->state, pp->quantum_left); // ,[<PID>]<process name>:<state number>(<quantum left>) for phase 1
           }
           cprintf("\n");
         }
@@ -525,13 +531,6 @@ kill(int pid)
   release(&ptable.lock);
   return -1;
 }
-
-// Syscall modification
-void schedlog(int n) {
-  schedlog_active = 1;
-  schedlog_lasttick = ticks + n;
-}
-
 
 //PAGEBREAK: 36
 // Print a process listing to console.  For debugging.

@@ -189,7 +189,9 @@ UPROGS=\
 	_usertests\
 	_wc\
 	_zombie\
-        _shutdown\
+    _shutdown\
+	_TEST\
+	_TEST_loop\
 
 
 fs.img: mkfs README $(UPROGS)
