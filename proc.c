@@ -344,86 +344,88 @@ scheduler(void)
     // Enable interrupts on this processor.
     sti();
 
-    // Priority Routine for Phase 2: Belonging to Expired Set > Current RUNNABLE processes (active)
-
-    // TODO Previously EXPIRED processes get to run first
-    for(int prio = EXPIRED; prio < ACTIVE; prio++){
-      for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-        if(p->state == RUNNABLE && p->set == prio){
-          p->set = ACTIVE;
-        }
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->state == RUNNABLE){
+        p->set = ACTIVE;
       }
-
-      // TODO Make this local to the active set
-      // Loop over process table looking for process to run.
-      acquire(&ptable.lock);
-      for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-        if(p->state != RUNNABLE)
-          continue;
-        if(p->set != ACTIVE)
-          continue;
-
-        // Switch to chosen process.  It is the process's job
-        // to release ptable.lock and then reacquire it
-        // before jumping back to us.
-        c->proc = p;
-        switchuvm(p);
-        p->state = RUNNING;
-
-        // Syscall modification
-        p->quantum_left = RSDL_PROC_QUANTUM;
-
-        if (schedlog_active) {
-          if (ticks > schedlog_lasttick) {
-            schedlog_active = 0;
-          } else {
-            // Schedlog for active set
-            cprintf("%d|active|0(0)", ticks); // <tick>|<set>|<level>(<quantum left>) for phase 2
-
-            struct proc *pp;
-            int highest_idx = -1;
-
-            for (int k = 0; k < NPROC; k++) {
-              pp = &ptable.proc[k];
-              if (pp->state != UNUSED && pp->set == ACTIVE) {
-                highest_idx = k;
-              }
-            }
-            
-            for (int k = 0; k <= highest_idx; k++) {
-              pp = &ptable.proc[k];
-              if (pp->state != UNUSED && pp->set == ACTIVE) cprintf(",[%d]%s:%d(%d)", k, pp->name, pp->state, pp->quantum_left); // ,[<PID>]<process name>:<state number>(<quantum left>) for phase 2
-            }
-            cprintf("\n");
-            // Schedlog for expired set
-            cprintf("%d|expired|0(0)", ticks); // <tick>|<set>|<level>(<quantum left>) for phase 2
-
-            highest_idx = -1;
-
-            for (int k = 0; k < NPROC; k++) {
-              pp = &ptable.proc[k];
-              if (pp->state != UNUSED && pp->set == EXPIRED) {
-                highest_idx = k;
-              }
-            }
-            
-            for (int k = 0; k <= highest_idx; k++) {
-              pp = &ptable.proc[k];
-              if (pp->state != UNUSED && pp->set == EXPIRED) cprintf(",[%d]%s:%d(%d)", k, pp->name, pp->state, pp->quantum_left); // ,[<PID>]<process name>:<state number>(<quantum left>) for phase 2
-            }
-            cprintf("\n");
-          }
-        }
-        // ==================================
-        swtch(&(c->scheduler), p->context);
-        switchkvm();
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-      }
-      release(&ptable.lock);
     }
+
+    // TODO Make this local to the active set
+    // Loop over process table looking for process to run.
+    acquire(&ptable.lock);
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->state != RUNNABLE)
+        continue;
+      if(p->set != ACTIVE)
+        continue;
+
+      // Switch to chosen process.  It is the process's job
+      // to release ptable.lock and then reacquire it
+      // before jumping back to us.
+      c->proc = p;
+      switchuvm(p);
+      p->state = RUNNING;
+
+      // Syscall modification
+      p->quantum_left = RSDL_PROC_QUANTUM;
+
+      if (schedlog_active) {
+        if (ticks > schedlog_lasttick) {
+          schedlog_active = 0;
+        } else {
+          // Schedlog for active set
+          cprintf("%d|active|0(0)", ticks); // <tick>|<set>|<level>(<quantum left>) for phase 2
+
+          struct proc *pp;
+          int highest_idx = -1;
+
+          for (int k = 0; k < NPROC; k++) {
+            pp = &ptable.proc[k];
+            if (pp->state != UNUSED && pp->set == ACTIVE) {
+              highest_idx = k;
+            }
+          }
+          
+          for (int k = 0; k <= highest_idx; k++) {
+            pp = &ptable.proc[k];
+            if (pp->state != UNUSED && pp->set == ACTIVE) cprintf(",[%d]%s:%d(%d)", k, pp->name, pp->state, pp->quantum_left); // ,[<PID>]<process name>:<state number>(<quantum left>) for phase 2
+          }
+          cprintf("\n");
+
+          // Schedlog for expired set
+          cprintf("%d|expired|0(0)", ticks); // <tick>|<set>|<level>(<quantum left>) for phase 2
+
+          highest_idx = -1;
+
+          for (int k = 0; k < NPROC; k++) {
+            pp = &ptable.proc[k];
+            if (pp->state != UNUSED && pp->set == EXPIRED) {
+              highest_idx = k;
+            }
+          }
+          
+          for (int k = 0; k <= highest_idx; k++) {
+            pp = &ptable.proc[k];
+            if (pp->state != UNUSED && pp->set == EXPIRED) cprintf(",[%d]%s:%d(%d)", k, pp->name, pp->state, pp->quantum_left); // ,[<PID>]<process name>:<state number>(<quantum left>) for phase 2
+          }
+          cprintf("\n");
+        }
+      }
+      // ==================================
+      swtch(&(c->scheduler), p->context);
+      switchkvm();
+
+      // Process is done running for now.
+      // It should have changed its p->state before coming back.
+      c->proc = 0;
+    }
+    
+    // TODO Swapping of sets 
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->set == ACTIVE) p->set = EXPIRED;
+      else if(p->set == EXPIRED) p->set = ACTIVE;
+    }
+    release(&ptable.lock);
   }
 }
 
