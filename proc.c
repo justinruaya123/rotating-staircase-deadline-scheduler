@@ -12,10 +12,6 @@ struct {
   struct proc proc[NPROC];
 } ptable;
 
-// Syscall modification
-int schedlog_active = 0;
-int schedlog_lasttick = 0;
-
 static struct proc *initproc;
 
 int nextpid = 1;
@@ -92,6 +88,9 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+
+  // Syscall Modification
+  p->set = NONE; // Initially, a process belongs to NONE set
 
   release(&ptable.lock);
 
@@ -267,6 +266,7 @@ exit(void)
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
+  curproc->set = NONE; // remove set belongingness upon exit
   sched();
   panic("zombie exit");
 }
@@ -315,6 +315,16 @@ wait(void)
   }
 }
 
+// Syscall modification
+int schedlog_active = 0;
+int schedlog_lasttick = 0;
+
+void schedlog(int n) {
+  schedlog_active = 1;
+  schedlog_lasttick = ticks + n;
+}
+
+
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -334,10 +344,19 @@ scheduler(void)
     // Enable interrupts on this processor.
     sti();
 
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->state == RUNNABLE){
+        p->set = ACTIVE;
+      }
+    }
+
+    // TODO Make this local to the active set
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
+        continue;
+      if(p->set != ACTIVE)
         continue;
 
       // Switch to chosen process.  It is the process's job
@@ -346,28 +365,48 @@ scheduler(void)
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
+
       // Syscall modification
+      p->quantum_left = RSDL_PROC_QUANTUM;
+
       if (schedlog_active) {
         if (ticks > schedlog_lasttick) {
           schedlog_active = 0;
         } else {
-          cprintf("%d", ticks);
+          // Schedlog for active set
+          cprintf("%d|active|0(0)", ticks); // <tick>|<set>|<level>(<quantum left>) for phase 2
 
           struct proc *pp;
           int highest_idx = -1;
 
           for (int k = 0; k < NPROC; k++) {
             pp = &ptable.proc[k];
-            if (pp->state != UNUSED) {
+            if (pp->state != UNUSED && pp->set == ACTIVE) {
               highest_idx = k;
             }
           }
-
+          
           for (int k = 0; k <= highest_idx; k++) {
             pp = &ptable.proc[k];
-            if (pp->state == UNUSED) cprintf(" | [%d] ---:0", k);
-            else if (pp->state == RUNNING) cprintf(" | [%d]*%s:%d", k, pp->name, pp->state);
-            else cprintf(" | [%d] %s:%d", k, pp->name, pp->state); // TODO Change printing
+            if (pp->state != UNUSED && pp->set == ACTIVE) cprintf(",[%d]%s:%d(%d)", k, pp->name, pp->state, pp->quantum_left); // ,[<PID>]<process name>:<state number>(<quantum left>) for phase 2
+          }
+          cprintf("\n");
+
+          // Schedlog for expired set
+          cprintf("%d|expired|0(0)", ticks); // <tick>|<set>|<level>(<quantum left>) for phase 2
+
+          highest_idx = -1;
+
+          for (int k = 0; k < NPROC; k++) {
+            pp = &ptable.proc[k];
+            if (pp->state != UNUSED && pp->set == EXPIRED) {
+              highest_idx = k;
+            }
+          }
+          
+          for (int k = 0; k <= highest_idx; k++) {
+            pp = &ptable.proc[k];
+            if (pp->state != UNUSED && pp->set == EXPIRED) cprintf(",[%d]%s:%d(%d)", k, pp->name, pp->state, pp->quantum_left); // ,[<PID>]<process name>:<state number>(<quantum left>) for phase 2
           }
           cprintf("\n");
         }
@@ -380,8 +419,13 @@ scheduler(void)
       // It should have changed its p->state before coming back.
       c->proc = 0;
     }
+    
+    // TODO Swapping of sets 
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->set == ACTIVE) p->set = EXPIRED;
+      else if(p->set == EXPIRED) p->set = ACTIVE;
+    }
     release(&ptable.lock);
-
   }
 }
 
@@ -525,13 +569,6 @@ kill(int pid)
   release(&ptable.lock);
   return -1;
 }
-
-// Syscall modification
-void schedlog(int n) {
-  schedlog_active = 1;
-  schedlog_lasttick = ticks + n;
-}
-
 
 //PAGEBREAK: 36
 // Print a process listing to console.  For debugging.

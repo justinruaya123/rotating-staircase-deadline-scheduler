@@ -33,9 +33,10 @@ struct context {
 };
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+enum procset { NONE, EXPIRED, ACTIVE };
 
 // Per-process state
-struct proc { // TODO Add PCB states for schedlog (quantum left)
+struct proc { // DONE Add PCB states for schedlog (quantum left)
   uint sz;                     // Size of process memory (bytes)
   pde_t* pgdir;                // Page table
   char *kstack;                // Bottom of kernel stack for this process
@@ -49,6 +50,11 @@ struct proc { // TODO Add PCB states for schedlog (quantum left)
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  // Syscall Modification
+  int quantum_left;            // Quantum left for the process
+  // TODO Check if there is a need for PCB entry for set belongingness
+  enum procset set;            // Check whether the process belongs to NONE, EXPIRED, or ACTIVE
 };
 
 // Process memory is laid out contiguously, low addresses first:
