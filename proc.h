@@ -33,7 +33,7 @@ struct context {
 };
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
-enum procset { EXPIRED, ACTIVE };
+enum procset { NONE, EXPIRED, ACTIVE };
 
 // Per-process state
 struct proc { // DONE Add PCB states for schedlog (quantum left)

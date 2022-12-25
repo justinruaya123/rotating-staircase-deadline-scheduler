@@ -90,7 +90,7 @@ found:
   p->pid = nextpid++;
 
   // Syscall Modification
-  p->set = ACTIVE; // Initially, a process belongs to NONE set
+  p->set = NONE; // Initially, a process belongs to NONE set
 
   release(&ptable.lock);
 
@@ -418,7 +418,7 @@ scheduler(void)
     // TODO Swapping of sets 
     acquire(&ptable.lock);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->set == ACTIVE) p->set = EXPIRED;
+      if(p->set == ACTIVE && p->state == RUNNABLE) p->set = EXPIRED;
       else if(p->set == EXPIRED) p->set = ACTIVE;
     }
     release(&ptable.lock);
