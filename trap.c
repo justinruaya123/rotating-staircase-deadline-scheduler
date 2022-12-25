@@ -106,8 +106,12 @@ trap(struct trapframe *tf)
      tf->trapno == T_IRQ0+IRQ_TIMER)
     
     // Syscall Modification
-    if(--myproc()->quantum_left == 0)
+    if(--myproc()->quantum_left == 0){
+      // TODO Check if it is possible to include myproc() to expired set in this line
+      myproc()->set = EXPIRED;
+      myproc()->quantum_left = RSDL_PROC_QUANTUM;
       yield();
+    }
 
   // Check if the process has been killed since we yielded
   if(myproc() && myproc()->killed && (tf->cs&3) == DPL_USER)
