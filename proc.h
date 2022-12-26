@@ -53,6 +53,7 @@ struct proc { // DONE Add PCB states for schedlog (quantum left)
 
   // Syscall Modification
   int quantum_left;            // Quantum left for the process
+  int level;
   // TODO Check if there is a need for PCB entry for set belongingness
   enum procset set;            // Check whether the process belongs to NONE, EXPIRED, or ACTIVE
 };
