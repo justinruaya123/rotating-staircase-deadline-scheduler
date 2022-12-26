@@ -12,6 +12,72 @@ struct {
   struct proc proc[NPROC];
 } ptable;
 
+// Process Queue Implementation
+int mod(int a, int b)
+{
+    int r = a % b;
+    return r < 0 ? r + b : r;
+}
+struct pq
+{
+  int front;
+  int rear;
+  struct proc * proc[NPROC];
+} prioq[1];
+
+
+void InitQueue(struct pq *Q)
+{
+  Q->front = 0;
+  Q->rear = 0;
+}
+void ENQUEUE(struct pq *Q, struct proc * x)
+{
+  Q->rear = mod((Q->rear + 1), NPROC);
+  Q->proc[Q->rear] = x;
+  if(Q->proc[Q->rear]->quantum_left == 0){
+    Q->proc[Q->rear]->quantum_left = RSDL_PROC_QUANTUM;
+  }
+  // cprintf("EN: %s\n", x->name);
+}
+
+// Check for running process.
+int CHECK(struct pq *Q, struct proc ** x)
+{
+  int k = mod(Q->front + 1, NPROC);
+  while(k != mod((Q->rear + 1), NPROC)){
+    if (Q->proc[k]->state == RUNNABLE && Q->proc[k]->set == ACTIVE){
+      *x = Q->proc[k];
+      return 1;
+    }
+    k = mod(k+1, NPROC);
+  }
+  return 0;
+}
+
+void REMOVE(struct pq *Q, struct proc * x)
+{
+  // Q->front = mod((Q->front + 1), NPROC);
+  // *x = Q->proc[Q->front];
+  int k = mod(Q->front + 1, NPROC);
+  while(Q->proc[k]->pid != x->pid){
+    k = mod((k + 1), NPROC); 
+  }
+  // pid found
+  // cprintf("RE: %s\n", Q->proc[k]->name);
+  while(k != mod(Q->rear + 1, NPROC)){
+    Q->proc[k] = Q->proc[mod((k + 1), NPROC)];
+    k = mod((k + 1), NPROC); 
+  }
+  Q->rear = mod((Q->rear - 1), NPROC);
+}
+
+int IsEmptyQueue(struct pq *Q)
+{
+  // cprintf("IE: %d\n", Q->front == Q->rear);
+  return(Q->front == Q->rear);
+}
+
 static struct proc *initproc;
 
 int nextpid = 1;
@@ -89,9 +155,6 @@ found:
   p->state = EMBRYO;
   p->pid = nextpid++;
 
-  // Syscall Modification
-  p->set = NONE; // Initially, a process belongs to NONE set
-
   release(&ptable.lock);
 
   // Allocate kernel stack.
@@ -114,6 +177,9 @@ found:
   p->context = (struct context*)sp;
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
+
+  p->set = ACTIVE;
+  ENQUEUE(&prioq[0], p);
 
   return p;
 }
@@ -266,7 +332,7 @@ exit(void)
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
-  curproc->set = NONE; // remove set belongingness upon exit
+  REMOVE(&prioq[0], curproc);
   sched();
   panic("zombie exit");
 }
@@ -315,7 +381,7 @@ wait(void)
   }
 }
 
-// Syscall modification
+// Schedlog variables
 int schedlog_active = 0;
 int schedlog_lasttick = 0;
 
@@ -323,7 +389,6 @@ void schedlog(int n) {
   schedlog_active = 1;
   schedlog_lasttick = ticks + n;
 }
-
 
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
@@ -344,20 +409,10 @@ scheduler(void)
     // Enable interrupts on this processor.
     sti();
 
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state == RUNNABLE){
-        p->set = ACTIVE;
-      }
-    }
-
-    // TODO Make this local to the active set
-    // Loop over process table looking for process to run.
+    // Loop over process queue looking for process to run.
     acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
-        continue;
-      if(p->set != ACTIVE)
-        continue;
+    if(!IsEmptyQueue(&prioq[0])){
+      if(CHECK(&prioq[0], &p)){
 
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
@@ -367,46 +422,29 @@ scheduler(void)
       p->state = RUNNING;
 
       // Syscall modification
-      p->quantum_left = RSDL_PROC_QUANTUM;
-
       if (schedlog_active) {
         if (ticks > schedlog_lasttick) {
           schedlog_active = 0;
         } else {
-          // Schedlog for active set
+          struct proc *pp;
+
           cprintf("%d|active|0(0)", ticks); // <tick>|<set>|<level>(<quantum left>) for phase 2
 
-          struct proc *pp;
-          int highest_idx = -1;
-
-          for (int k = 0; k < NPROC; k++) {
-            pp = &ptable.proc[k];
-            if (pp->state != UNUSED && pp->set == ACTIVE) {
-              highest_idx = k;
-            }
-          }
-          
-          for (int k = 0; k <= highest_idx; k++) {
-            pp = &ptable.proc[k];
-            if (pp->state != UNUSED && pp->set == ACTIVE) cprintf(",[%d]%s:%d(%d)", k, pp->name, pp->state, pp->quantum_left); // ,[<PID>]<process name>:<state number>(<quantum left>) for phase 2
+          int k = mod(prioq[0].front+1, NPROC);
+          while (k != mod((prioq[0].rear + 1), NPROC)) {
+            pp = prioq[0].proc[k];
+            if (pp->set == ACTIVE) cprintf(",[%d]%s:%d(%d)", pp->pid, pp->name, pp->state, pp->quantum_left); // ,[<PID>]<process name>:<state number>(<quantum left>) for phase 1
+            k = mod((k + 1), NPROC);
           }
           cprintf("\n");
-
-          // Schedlog for expired set
+          
           cprintf("%d|expired|0(0)", ticks); // <tick>|<set>|<level>(<quantum left>) for phase 2
 
-          highest_idx = -1;
-
-          for (int k = 0; k < NPROC; k++) {
-            pp = &ptable.proc[k];
-            if (pp->state != UNUSED && pp->set == EXPIRED) {
-              highest_idx = k;
-            }
-          }
-          
-          for (int k = 0; k <= highest_idx; k++) {
-            pp = &ptable.proc[k];
-            if (pp->state != UNUSED && pp->set == EXPIRED) cprintf(",[%d]%s:%d(%d)", k, pp->name, pp->state, pp->quantum_left); // ,[<PID>]<process name>:<state number>(<quantum left>) for phase 2
+          k = mod(prioq[0].front+1, NPROC);
+          while (k != mod((prioq[0].rear + 1), NPROC)) {
+            pp = prioq[0].proc[k];
+            if (pp->set == EXPIRED) cprintf(",[%d]%s:%d(%d)", pp->pid, pp->name, pp->state, pp->quantum_left); // ,[<PID>]<process name>:<state number>(<quantum left>) for phase 1
+            k = mod((k + 1), NPROC);
           }
           cprintf("\n");
         }
@@ -418,12 +456,20 @@ scheduler(void)
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
-    }
-    
-    // TODO Swapping of sets 
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->set == ACTIVE) p->set = EXPIRED;
-      else if(p->set == EXPIRED) p->set = ACTIVE;
+      }
+      else {
+        struct proc *pp;
+        // swap
+        int k = mod(prioq[0].front+1, NPROC);
+        while (k != mod((prioq[0].rear + 1), NPROC)) {
+          pp = prioq[0].proc[k];
+          if (pp->set == EXPIRED) 
+            pp->set = ACTIVE;
+          else
+            pp->set = EXPIRED;
+          k = mod((k + 1), NPROC);
+        }
+      }
     }
     release(&ptable.lock);
   }
@@ -460,7 +506,10 @@ void
 yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
+  REMOVE(&prioq[0], myproc());
   myproc()->state = RUNNABLE;
+  myproc()->set = EXPIRED;
+  ENQUEUE(&prioq[0], myproc());
   sched();
   release(&ptable.lock);
 }
@@ -487,7 +536,7 @@ forkret(void)
 }
 
 // Atomically release lock and sleep on chan.
-// Reacquires lock when awakened.
+// Reacquires lock when awakened.)
 void
 sleep(void *chan, struct spinlock *lk)
 {
@@ -511,8 +560,10 @@ sleep(void *chan, struct spinlock *lk)
   }
   // Go to sleep.
   p->chan = chan;
-  p->state = SLEEPING;
 
+  REMOVE(&prioq[0], p);
+  p->state = SLEEPING;
+  ENQUEUE(&prioq[0], p);
   sched();
 
   // Tidy up.
@@ -534,8 +585,9 @@ wakeup1(void *chan)
   struct proc *p;
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
+    if(p->state == SLEEPING && p->chan == chan){
       p->state = RUNNABLE;
+    }
 }
 
 // Wake up all processes sleeping on chan.
@@ -560,8 +612,9 @@ kill(int pid)
     if(p->pid == pid){
       p->killed = 1;
       // Wake process from sleep if necessary.
-      if(p->state == SLEEPING)
+      if(p->state == SLEEPING){
         p->state = RUNNABLE;
+      }
       release(&ptable.lock);
       return 0;
     }
