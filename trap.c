@@ -107,9 +107,6 @@ trap(struct trapframe *tf)
     
     // Syscall Modification
     if(--myproc()->quantum_left == 0){
-      // TODO Check if it is possible to include myproc() to expired set in this line
-      myproc()->set = EXPIRED;
-      myproc()->quantum_left = RSDL_PROC_QUANTUM;
       yield();
     }
 

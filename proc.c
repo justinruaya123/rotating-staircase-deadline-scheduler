@@ -46,7 +46,7 @@ int CHECK(struct pq *Q, struct proc ** x)
 {
   int k = mod(Q->front + 1, NPROC);
   while(k != mod((Q->rear + 1), NPROC)){
-    if (Q->proc[k]->state == RUNNABLE && Q->proc[k]->set == ACTIVE){
+    if (Q->proc[k]->state == RUNNABLE){
       *x = Q->proc[k];
       return 1;
     }
@@ -178,7 +178,6 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
-  p->set = ACTIVE;
   ENQUEUE(&prioq[0], p);
 
   return p;
@@ -433,17 +432,7 @@ scheduler(void)
           int k = mod(prioq[0].front+1, NPROC);
           while (k != mod((prioq[0].rear + 1), NPROC)) {
             pp = prioq[0].proc[k];
-            if (pp->set == ACTIVE) cprintf(",[%d]%s:%d(%d)", pp->pid, pp->name, pp->state, pp->quantum_left); // ,[<PID>]<process name>:<state number>(<quantum left>) for phase 1
-            k = mod((k + 1), NPROC);
-          }
-          cprintf("\n");
-          
-          cprintf("%d|expired|0(0)", ticks); // <tick>|<set>|<level>(<quantum left>) for phase 2
-
-          k = mod(prioq[0].front+1, NPROC);
-          while (k != mod((prioq[0].rear + 1), NPROC)) {
-            pp = prioq[0].proc[k];
-            if (pp->set == EXPIRED) cprintf(",[%d]%s:%d(%d)", pp->pid, pp->name, pp->state, pp->quantum_left); // ,[<PID>]<process name>:<state number>(<quantum left>) for phase 1
+            cprintf(",[%d]%s:%d(%d)", pp->pid, pp->name, pp->state, pp->quantum_left); // ,[<PID>]<process name>:<state number>(<quantum left>) for phase 1
             k = mod((k + 1), NPROC);
           }
           cprintf("\n");
@@ -456,19 +445,6 @@ scheduler(void)
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
-      }
-      else {
-        struct proc *pp;
-        // swap
-        int k = mod(prioq[0].front+1, NPROC);
-        while (k != mod((prioq[0].rear + 1), NPROC)) {
-          pp = prioq[0].proc[k];
-          if (pp->set == EXPIRED) 
-            pp->set = ACTIVE;
-          else
-            pp->set = EXPIRED;
-          k = mod((k + 1), NPROC);
-        }
       }
     }
     release(&ptable.lock);
@@ -508,7 +484,6 @@ yield(void)
   acquire(&ptable.lock);  //DOC: yieldlock
   REMOVE(&prioq[0], myproc());
   myproc()->state = RUNNABLE;
-  myproc()->set = EXPIRED;
   ENQUEUE(&prioq[0], myproc());
   sched();
   release(&ptable.lock);
