@@ -35,7 +35,9 @@ void ENQUEUE(struct pq *Q, struct proc * x)
 {
   Q->rear = mod((Q->rear + 1), NPROC);
   Q->proc[Q->rear] = x;
-  Q->proc[Q->rear]->quantum_left = RSDL_PROC_QUANTUM;
+  if(Q->proc[Q->rear]->quantum_left == 0){
+    Q->proc[Q->rear]->quantum_left = RSDL_PROC_QUANTUM;
+  }
   // cprintf("EN: %s\n", x->name);
 }
 
