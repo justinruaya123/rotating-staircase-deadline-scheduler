@@ -51,10 +51,10 @@ struct proc { // DONE Add PCB states for schedlog (quantum left)
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 
-  // Syscall Modification
+  // Phase 3 Modification
   int quantum_left;            // Quantum left for the process
-  // TODO Check if there is a need for PCB entry for set belongingness
   enum procset set;            // Check whether the process belongs to NONE, EXPIRED, or ACTIVE
+  uint setlevel;               // Determines the level of the process
 };
 
 // Process memory is laid out contiguously, low addresses first:

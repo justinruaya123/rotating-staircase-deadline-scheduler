@@ -266,7 +266,6 @@ exit(void)
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
-  curproc->set = NONE; // remove set belongingness upon exit
   sched();
   panic("zombie exit");
 }
@@ -344,19 +343,13 @@ scheduler(void)
     // Enable interrupts on this processor.
     sti();
 
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state == RUNNABLE){
-        p->set = ACTIVE;
-      }
-    }
-
     // TODO Make this local to the active set
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
         continue;
-      if(p->set != ACTIVE)
+      if(p->set == EXPIRED)
         continue;
 
       // Switch to chosen process.  It is the process's job
@@ -364,6 +357,7 @@ scheduler(void)
       // before jumping back to us.
       c->proc = p;
       switchuvm(p);
+      p->set = ACTIVE;
       p->state = RUNNING;
 
       // Syscall modification
@@ -419,8 +413,10 @@ scheduler(void)
       // It should have changed its p->state before coming back.
       c->proc = 0;
     }
+    release(&ptable.lock);
     
     // TODO Swapping of sets 
+    acquire(&ptable.lock);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->set == ACTIVE) p->set = EXPIRED;
       else if(p->set == EXPIRED) p->set = ACTIVE;
