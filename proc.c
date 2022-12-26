@@ -558,8 +558,10 @@ sleep(void *chan, struct spinlock *lk)
   }
   // Go to sleep.
   p->chan = chan;
-  p->state = SLEEPING;
 
+  REMOVE(&prioq[0], p);
+  p->state = SLEEPING;
+  ENQUEUE(&prioq[0], p);
   sched();
 
   // Tidy up.
