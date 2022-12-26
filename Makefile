@@ -192,6 +192,8 @@ UPROGS=\
     _shutdown\
 	_TEST\
 	_TEST_loop\
+	_TEST_a\
+	_TEST_b\
 
 
 fs.img: mkfs README $(UPROGS)
