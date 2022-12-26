@@ -49,20 +49,15 @@ void DEQUEUE(struct pq *Q, struct proc ** x)
 // Check for running process.
 int CHECK(struct pq *Q, struct proc ** x)
 {
-  int tag = 0;
   int k = mod(Q->front + 1, NPROC);
   while(k != mod((Q->rear + 1), NPROC)){
     if (Q->proc[k]->state == RUNNABLE){
-      tag = 1;
-      break;
+      *x = Q->proc[k];
+      return 1;
     }
     k = mod(k+1, NPROC);
   }
-  if(tag){
-    *x = Q->proc[k];
-    // cprintf("CH: %s\n", Q->proc[k]->name);
-  }
-  return tag;
+  return 0;
 }
 
 void REMOVE(struct pq *Q, struct proc * x)
