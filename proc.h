@@ -33,7 +33,6 @@ struct context {
 };
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
-enum procset { NONE, EXPIRED, ACTIVE };
 
 // Per-process state
 struct proc { // DONE Add PCB states for schedlog (quantum left)
@@ -54,7 +53,6 @@ struct proc { // DONE Add PCB states for schedlog (quantum left)
   // Phase 3 Modification
   int quantum_left;            // Quantum left for the process
   int level;                   // Priority level for the process
-  enum procset set;            // Check whether the process belongs to NONE, EXPIRED, or ACTIVE
 };
 
 // Process memory is laid out contiguously, low addresses first:
@@ -62,3 +60,40 @@ struct proc { // DONE Add PCB states for schedlog (quantum left)
 //   original data and bss
 //   fixed-size stack
 //   expandable heap
+
+// Process queue struct
+struct pq
+{
+  int front;
+  int rear;
+  int quantum_left;
+  struct proc * proc[NPROC];
+};
+
+// Struct set for ACTIVE and EXPIRED sets
+struct set
+{
+  char name[16];
+  struct pq pq[RSDL_LEVELS];
+};
+
+// Initialize the active and expired sets using this function
+void InitSet(struct set * set, char * name);
+
+// Check if process queue is empty
+int IsEmptyQueue(struct pq *Q);
+
+// Enqueue incoming process
+void ENQUEUE(struct pq *Q, struct proc * x);
+
+// Dequeue the process queue
+void DEQUEUE(struct pq *Q, struct proc ** x);
+
+// Check for running process
+int CHECK(struct pq *Q, struct proc ** x);
+
+// Check for quantum of the current level
+int QUANTUM(struct pq *Q);
+
+// Remove outgoing process
+void REMOVE(struct pq *Q, struct proc * x);
