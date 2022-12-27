@@ -33,7 +33,7 @@ struct context {
 };
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
-enum procset { EXPIRED, NONE, ACTIVE };
+enum procset { NONE, EXPIRED, ACTIVE };
 
 // Per-process state
 struct proc { // DONE Add PCB states for schedlog (quantum left)
@@ -51,7 +51,7 @@ struct proc { // DONE Add PCB states for schedlog (quantum left)
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 
-  // Syscall Modification
+  // Phase 3 Modification
   int quantum_left;            // Quantum left for the process
   int level;                   // Priority level for the process
   enum procset set;            // Check whether the process belongs to NONE, EXPIRED, or ACTIVE
