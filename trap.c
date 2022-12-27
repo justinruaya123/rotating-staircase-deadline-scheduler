@@ -122,15 +122,17 @@ trap(struct trapframe *tf)
         while(!IsEmptyQueue(&active.pq[level])){
           DEQUEUE(&active.pq[level], &pp);
           pp->level = RSDL_STARTING_LEVEL;
-          ENQUEUE(&active.pq[RSDL_STARTING_LEVEL], pp);
+          if (pp->pid != myproc()->pid) ENQUEUE(&active.pq[RSDL_STARTING_LEVEL], pp);
         }
+        ENQUEUE(&active.pq[RSDL_STARTING_LEVEL], myproc());
       }
       else {
         while(!IsEmptyQueue(&active.pq[level])){
           DEQUEUE(&active.pq[level], &pp);
           pp->level++;
-          ENQUEUE(&active.pq[level+1], pp);
+          if (pp->pid != myproc()->pid) ENQUEUE(&active.pq[level+1], pp);
         }
+        ENQUEUE(&active.pq[level+1], myproc());
       }
     }
     // Syscall Modification

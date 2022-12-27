@@ -437,11 +437,10 @@ scheduler(void)
     acquire(&ptable.lock);
     for(int l = 0; l < RSDL_LEVELS; l++) {
 
-      if(!QUANTUM(&active.pq[l])) continue;
       if(IsEmptyQueue(&active.pq[l])) continue;
+      if(!QUANTUM(&active.pq[l])) continue;
       if(!CHECK(&active.pq[l], &p)) continue;
 
-      swap = 0;
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -450,8 +449,8 @@ scheduler(void)
       p->state = RUNNING;
 
       // Syscall modification
-      if (1) {
-        if (0) {
+      if (schedlog_active) {
+        if (ticks > schedlog_lasttick) {
           schedlog_active = 0;
         } else {
           struct proc *pp;
@@ -488,10 +487,12 @@ scheduler(void)
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
+      swap = 0;
       break;
     }
     // SWAP IF ACTIVE SET IS EMPTY
     if(swap) {
+      cprintf("\nperform swap\n\n");
       // empty active set first before swap
       struct proc * pp;
       for(int l = 0; l < RSDL_LEVELS-1; l++) {

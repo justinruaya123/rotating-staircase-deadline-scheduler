@@ -74,6 +74,7 @@ struct pq
 struct set
 {
   char name[16];
+  int count;
   struct pq pq[RSDL_LEVELS];
 };
 
