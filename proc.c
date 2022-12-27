@@ -23,7 +23,7 @@ struct pq
   int front;
   int rear;
   struct proc * proc[NPROC];
-} prioq[RDSL_LEVELS];
+} prioq[RSDL_LEVELS];
 
 void ENQUEUE(struct pq *Q, struct proc * x)
 {
@@ -211,7 +211,7 @@ userinit(void)
 
   p->state = RUNNABLE;
   p->set = ACTIVE;
-  p->level = RDSL_STARTING_LEVEL;
+  p->level = RSDL_STARTING_LEVEL;
   ENQUEUE(&prioq[p->level], p);
 
   release(&ptable.lock);
@@ -280,7 +280,7 @@ fork(void)
 
   np->state = RUNNABLE;
   np->set = ACTIVE;
-  np->level = RDSL_STARTING_LEVEL;
+  np->level = RSDL_STARTING_LEVEL;
   ENQUEUE(&prioq[np->level], np);
 
   release(&ptable.lock);
@@ -410,7 +410,7 @@ scheduler(void)
 
     // Loop over process queue looking for process to run.
     acquire(&ptable.lock);
-    for(int l = 0; l < RDSL_LEVELS; l++) {
+    for(int l = 0; l < RSDL_LEVELS; l++) {
 
       if(IsEmptyQueue(&prioq[l])) continue;
       if(!CHECK(&prioq[l], &p)) continue;
@@ -431,7 +431,7 @@ scheduler(void)
           struct proc *pp;
           int k;
           // Schedlog for active set, but with levels
-          for(int l = 0; l < RDSL_LEVELS; l++) {
+          for(int l = 0; l < RSDL_LEVELS; l++) {
             cprintf("%d|active|%d(0)", ticks, l); // <tick>|<set>|<level>(<quantum left>) for phase 3
             
             k = mod(prioq[l].front+1, NPROC);
@@ -443,7 +443,7 @@ scheduler(void)
             cprintf("\n");
           }
           // Schedlog for expired set, but with levels
-          for(int l = 0; l < RDSL_LEVELS; l++) {
+          for(int l = 0; l < RSDL_LEVELS; l++) {
             cprintf("%d|expired|%d(0)", ticks, l); // <tick>|<set>|<level>(<quantum left>) for phase 3
 
             k = mod(prioq[l].front+1, NPROC);
@@ -466,7 +466,7 @@ scheduler(void)
     }
     // SWAP IF ACTIVE SET IS EMPTY
     if(isActiveEmpty) {
-      for(int l = 0; l < RDSL_LEVELS; l++) {
+      for(int l = 0; l < RSDL_LEVELS; l++) {
         struct proc *pp;
         // swap
         int k = mod(prioq[l].front+1, NPROC);
@@ -520,9 +520,9 @@ yield(void)
   int level = myproc()->level;
   REMOVE(&prioq[level], myproc());
   myproc()->state = RUNNABLE;
-  if (level+1 == RDSL_LEVELS){
+  if (level+1 == RSDL_LEVELS){
     myproc()->set = EXPIRED;
-    myproc()->level = RDSL_STARTING_LEVEL;
+    myproc()->level = RSDL_STARTING_LEVEL;
     level = myproc()->level;
   }
   else {
