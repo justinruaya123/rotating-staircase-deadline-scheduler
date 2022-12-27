@@ -18,11 +18,11 @@ extern struct set active;
 // Process queue methods
 extern void InitSet(struct set * set, char * name);
 extern int IsEmptyQueue(struct pq *Q);
-extern void ENQUEUE(struct pq *Q, struct proc * x);
-extern void DEQUEUE(struct pq *Q, struct proc ** x);
+extern void ENQUEUE(struct set *S, int level, struct proc * x);
+extern void DEQUEUE(struct set *S, int level, struct proc ** x);
 extern int CHECK(struct pq *Q, struct proc ** x);
 extern int QUANTUM(struct pq *Q);
-extern void REMOVE(struct pq *Q, struct proc * x);
+extern void REMOVE(struct set *S, int level, struct proc * x);
 
 void
 tvinit(void)
@@ -118,21 +118,22 @@ trap(struct trapframe *tf)
     if(--active.pq[myproc()->level].quantum_left == 0){
       int level = myproc()->level;
       struct proc * pp;
+
       if (level+1 == RSDL_LEVELS){
         while(!IsEmptyQueue(&active.pq[level])){
-          DEQUEUE(&active.pq[level], &pp);
+          DEQUEUE(&active, level, &pp);
           pp->level = RSDL_STARTING_LEVEL;
-          if (pp->pid != myproc()->pid) ENQUEUE(&active.pq[RSDL_STARTING_LEVEL], pp);
+          if (pp->pid != myproc()->pid) ENQUEUE(&active, RSDL_STARTING_LEVEL, pp);
         }
-        ENQUEUE(&active.pq[RSDL_STARTING_LEVEL], myproc());
+        ENQUEUE(&active , RSDL_STARTING_LEVEL, myproc());
       }
       else {
         while(!IsEmptyQueue(&active.pq[level])){
-          DEQUEUE(&active.pq[level], &pp);
+          DEQUEUE(&active, level, &pp);
           pp->level++;
-          if (pp->pid != myproc()->pid) ENQUEUE(&active.pq[level+1], pp);
+          if (pp->pid != myproc()->pid) ENQUEUE(&active, level+1, pp);
         }
-        ENQUEUE(&active.pq[level+1], myproc());
+        ENQUEUE(&active, level+1, myproc());
       }
     }
     // Syscall Modification
