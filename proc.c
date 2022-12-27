@@ -455,11 +455,10 @@ scheduler(void)
             cprintf("\n");
           }
         }
+        // ==================================
+        swtch(&(c->scheduler), p->context);
+        switchkvm();
       }
-      // ==================================
-      swtch(&(c->scheduler), p->context);
-      switchkvm();
-
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
