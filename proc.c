@@ -356,7 +356,7 @@ exit(void)
       if(p->state == ZOMBIE)
         wakeup1(initproc);
     }
-    cprintf("EXIT %d\n", myproc()->pid);
+    //cprintf("EXIT %d\n", myproc()->pid);
   }
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
@@ -432,7 +432,7 @@ scheduler(void)
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
-  //int swap = 1;
+  int swap = 1;
   
   for(;;){
     // Enable interrupts on this processor.
@@ -492,15 +492,17 @@ scheduler(void)
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
-      //swap = 0;
+      swap = 0;
       break;
     }
+    //cprintf("ACTIVE SIZE: %d\n", active.size);
     // SWAP IF ACTIVE SET IS EMPTY
-    if(active.size == 0) { //active.size == 0
-      cprintf("\n perform swap\n\n");
+    if(swap && schedlog_active) {
+    //if(active.size == 0) { //active.size == 0
+      cprintf("\n perform swap with size %d\n\n", active.size);
       // empty active set first before swap
       struct proc * pp;
-      for(int l = 0; l < RSDL_LEVELS; l++) {
+      for(int l = 0; l < RSDL_LEVELS-1; l++) {
         //cprintf("HELLO %d\n", l);
         while(!IsEmptyQueue(&active.pq[l])){
           DEQUEUE(&active, l, &pp);
@@ -524,7 +526,7 @@ scheduler(void)
         expired.pq[l].quantum_left = RSDL_LEVEL_QUANTUM;
       }
     }
-    //swap = 1;
+    swap = 1;
 
     release(&ptable.lock);
   }
