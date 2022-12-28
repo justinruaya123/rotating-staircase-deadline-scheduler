@@ -14,6 +14,15 @@ sys_fork(void)
 }
 
 int
+sys_priofork(int)
+{
+  int n;
+  if(argint(0, &n) < 0 || argint(0, &n) >= RSDL_LEVELS) 
+    return -1; //invalid n
+  return priofork(n);
+}
+
+int
 sys_exit(void)
 {
   exit();

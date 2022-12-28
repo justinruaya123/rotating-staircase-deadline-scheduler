@@ -259,7 +259,7 @@ userinit(void)
   acquire(&ptable.lock);
 
   p->state = RUNNABLE;
-  p->starting_level = RSDL_STARTING_LEVEL; // TODO fix this on priofork
+  p->starting_level = RSDL_STARTING_LEVEL;
   ENQUEUE(&active.pq[RSDL_STARTING_LEVEL], p);
 
   release(&ptable.lock);
@@ -289,9 +289,7 @@ growproc(int n)
 // Create a new process copying p as the parent.
 // Sets up stack to return as if from system call.
 // Caller must set state of returned proc to RUNNABLE.
-int
-fork(void)
-{
+int priofork(int n) {
   int i, pid;
   struct proc *np;
   struct proc *curproc = myproc();
@@ -327,12 +325,18 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
-  np->starting_level = RSDL_STARTING_LEVEL; // TODO fix this on priofork
-  ENQUEUE(&active.pq[RSDL_STARTING_LEVEL], np);
+  np->starting_level = n;
+  ENQUEUE(&active.pq[n], np);
 
   release(&ptable.lock);
 
   return pid;
+}
+
+int
+fork(void)
+{
+  return priofork(RSDL_STARTING_LEVEL);
 }
 
 // Exit the current process.  Does not return.
@@ -457,7 +461,7 @@ scheduler(void)
     // Loop over process queue looking for process to run.
     if(IsEmptySet(&active) && !IsEmptySet(&expired)){
       //if(active.size == 0) { //active.size == 0
-      // cprintf("\nperform swap\n\n"); //TODO REMOVE THIS
+       //cprintf("\nperform swap\n\n"); //TODO REMOVE THIS
 
       // refresh quanta for active and expired sets
       for(int l = 0; l < RSDL_LEVELS; l++) {

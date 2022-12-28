@@ -3,7 +3,7 @@
 int main() {
 schedlog(10000);
 for (int i = 0; i < 3; i++) {
-if (fork() == 0) {
+if (priofork(0) == 0) {
 char *argv[] = {"TEST_loop", 0};
 exec("TEST_loop", argv);
 }
@@ -11,5 +11,6 @@ exec("TEST_loop", argv);
 for (int i = 0; i < 3; i++) {
 wait();
 }
+printf(1, "SHUTTING DOWN \n");
 shutdown();
 }
