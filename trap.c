@@ -14,15 +14,16 @@ extern uint vectors[];  // in vectors.S: array of 256 entry pointers
 struct spinlock tickslock;
 uint ticks;
 extern struct set active;
+extern struct set expired;
 
 // Process queue methods
 extern void InitSet(struct set * set, char * name);
 extern int IsEmptyQueue(struct pq *Q);
-extern void ENQUEUE(struct set *S, int level, struct proc * x);
-extern void DEQUEUE(struct set *S, int level, struct proc ** x);
+extern void ENQUEUE(struct pq *Q, struct proc * x);
+extern void DEQUEUE(struct pq *Q, struct proc ** x);
+extern void REMOVE(struct pq *Q, struct proc * x);
 extern int CHECK(struct pq *Q, struct proc ** x);
 extern int QUANTUM(struct pq *Q);
-extern void REMOVE(struct set *S, int level, struct proc * x);
 
 void
 tvinit(void)
@@ -114,30 +115,44 @@ trap(struct trapframe *tf)
   // If interrupts were on while locks held, would need to check nlock.
   if(myproc() && myproc()->state == RUNNING &&
      tf->trapno == T_IRQ0+IRQ_TIMER){
-    
-    if(--active.pq[myproc()->level].quantum_left == 0){
-      int level = myproc()->level;
-      struct proc * pp;
 
+    int level = CHECKLEVEL(&active, myproc());
+
+    --myproc()->quantum_left; // Process-local quanta
+    --active.pq[level].quantum_left; // Level quanta
+
+    // cprintf("pid %d level %d quantum left: %d\n",myproc()->pid, level,  active.pq[level].quantum_left);
+    if(active.pq[level].quantum_left == 0){
+      struct proc * pp;
+      REMOVE(&active.pq[level], myproc());
       if (level+1 == RSDL_LEVELS){
         while(!IsEmptyQueue(&active.pq[level])){
-          DEQUEUE(&active, level, &pp);
-          pp->level = RSDL_STARTING_LEVEL;
-          if (pp->pid != myproc()->pid) ENQUEUE(&active, RSDL_STARTING_LEVEL, pp);
+          DEQUEUE(&active.pq[level], &pp);
+          ENQUEUE(&expired.pq[pp->starting_level], pp);
         }
-        ENQUEUE(&active , RSDL_STARTING_LEVEL, myproc());
+        ENQUEUE(&expired.pq[myproc()->starting_level], myproc());
+        yield();
       }
       else {
         while(!IsEmptyQueue(&active.pq[level])){
-          DEQUEUE(&active, level, &pp);
-          pp->level++;
-          if (pp->pid != myproc()->pid) ENQUEUE(&active, level+1, pp);
+          DEQUEUE(&active.pq[level], &pp);
+          ENQUEUE(&active.pq[level+1], pp);
         }
-        ENQUEUE(&active, level+1, myproc());
+        ENQUEUE(&active.pq[level+1], myproc());
+        yield();
       }
     }
     // Syscall Modification
-    if(--myproc()->quantum_left == 0){
+    else if(myproc()->quantum_left == 0){
+      level = CHECKLEVEL(&active, myproc());
+      REMOVE(&active.pq[level], myproc());
+      if (level+1 == RSDL_LEVELS){
+        ENQUEUE(&expired.pq[myproc()->starting_level], myproc());
+      }
+      else {
+        level++;
+        ENQUEUE(&active.pq[level], myproc());
+      }
       yield();
     }
   }

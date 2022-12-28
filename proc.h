@@ -52,8 +52,7 @@ struct proc { // DONE Add PCB states for schedlog (quantum left)
 
   // Phase 3 Modification
   int quantum_left;            // Quantum left for the process
-  int starting_level;
-  int level;                   // Priority level for the process
+  int starting_level;          // Original priority level for the process
 };
 
 // Process memory is laid out contiguously, low addresses first:
@@ -75,21 +74,25 @@ struct pq
 struct set
 {
   char name[16];
-  int size;
   struct pq pq[RSDL_LEVELS];
 };
 
 // Initialize the active and expired sets using this function
 void InitSet(struct set * set, char * name);
 
+void InitQueue(struct pq *Q);
+
 // Check if process queue is empty
 int IsEmptyQueue(struct pq *Q);
 
 // Enqueue incoming process
-void ENQUEUE(struct set *S, int level, struct proc * x);
+void ENQUEUE(struct pq *Q, struct proc * x);
 
 // Dequeue the process queue
-void DEQUEUE(struct set *S, int level, struct proc ** x);
+void DEQUEUE(struct pq *Q, struct proc ** x);
+
+// Remove outgoing process
+void REMOVE(struct pq *Q, struct proc * x);
 
 // Check for running process
 int CHECK(struct pq *Q, struct proc ** x);
@@ -97,5 +100,4 @@ int CHECK(struct pq *Q, struct proc ** x);
 // Check for quantum of the current level
 int QUANTUM(struct pq *Q);
 
-// Remove outgoing process
-void REMOVE(struct set *S, int level, struct proc * x);
+int CHECKLEVEL(struct set *S, struct proc *p);
