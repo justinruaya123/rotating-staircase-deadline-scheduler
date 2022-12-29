@@ -131,7 +131,6 @@ trap(struct trapframe *tf)
           ENQUEUE(&expired.pq[pp->starting_level], pp);
         }
         ENQUEUE(&expired.pq[myproc()->starting_level], myproc());
-        yield();
       }
       else {
         while(!IsEmptyQueue(&active.pq[level])){
@@ -139,8 +138,8 @@ trap(struct trapframe *tf)
           ENQUEUE(&active.pq[level+1], pp);
         }
         ENQUEUE(&active.pq[level+1], myproc());
-        yield();
       }
+      yield();
     }
     // Syscall Modification
     else if(myproc()->quantum_left == 0){

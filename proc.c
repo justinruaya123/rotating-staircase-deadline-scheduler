@@ -22,6 +22,7 @@ int mod(int a, int b)
     return r < 0 ? r + b : r;
 }
 
+// Initialize the queue
 void InitQueue(struct pq *Q){
   Q->front = 0;
   Q->rear = 0;
@@ -32,7 +33,7 @@ void InitQueue(struct pq *Q){
 void InitSet(struct set * set, char * name){
   safestrcpy(set->name, name, sizeof(set->name));
   for(int l = 0; l < RSDL_LEVELS; l++) {
-    InitQueue(&set->pq[l]);
+    InitQueue(&set->pq[l]); // initialize each queue for each set
   }
 }
 
@@ -69,7 +70,7 @@ void DEQUEUE(struct pq *Q, struct proc ** x)
   *x = Q->proc[Q->front];
 }
 
-// Check for running process
+// Check for running process.
 int CHECK(struct pq *Q, struct proc ** x)
 {
   int k = mod(Q->front + 1, NPROC);
