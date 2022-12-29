@@ -455,7 +455,7 @@ scheduler(void)
     sti();
 
     // Loop over process queue looking for process to run.
-    if(IsEmptySet(&active) && !IsEmptySet(&expired)){
+    if(IsEmptySet(&active)){
       //if(active.size == 0) { //active.size == 0
       // cprintf("\nperform swap\n\n"); //TODO REMOVE THIS
 
@@ -506,8 +506,8 @@ scheduler(void)
       p->state = RUNNING;
 
       // Syscall modification
-      if (schedlog_active) { // schedlog_active
-        if (ticks > schedlog_lasttick) { // ticks > schedlog_lasttick
+      if (1) { // schedlog_active
+        if (0) { // ticks > schedlog_lasttick
           schedlog_active = 0;
         } else {
           struct proc *pp;
