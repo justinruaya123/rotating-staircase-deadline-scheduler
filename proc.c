@@ -22,6 +22,14 @@ int mod(int a, int b)
     return r < 0 ? r + b : r;
 }
 
+void acquirelock(void){
+  acquire(&ptable.lock);
+}
+
+void releaselock(void){
+  release(&ptable.lock);
+}
+
 // Initialize the queue
 void InitQueue(struct pq *Q){
   Q->front = 0;
@@ -56,16 +64,17 @@ int IsEmptySet(struct set *S){
 void ENQUEUE(struct pq *Q, struct proc * x)
 {
   Q->rear = mod((Q->rear + 1), NPROC);
-  Q->proc[Q->rear] = x;
-  if(Q->proc[Q->rear]->quantum_left == 0){
-    Q->proc[Q->rear]->quantum_left = RSDL_PROC_QUANTUM;
+  if(x->quantum_left == 0){
+    x->quantum_left = RSDL_PROC_QUANTUM;
   }
+  Q->proc[Q->rear] = x;
   // cprintf("EN: %s\n", x->name);
 }
 
 // Dequeue the process queue
 void DEQUEUE(struct pq *Q, struct proc ** x)
 {
+  if (IsEmptyQueue(Q)) panic("queue underflow");
   Q->front = mod((Q->front + 1), NPROC);
   *x = Q->proc[Q->front];
 }
@@ -85,7 +94,7 @@ int CHECK(struct pq *Q, struct proc ** x)
   return 0;
 }
 
-int CHECKLEVEL(struct set *S, struct proc *p){
+int GETLEVEL(struct set *S, struct proc *p){
   for(int l = 0; l < RSDL_LEVELS; l++) {
     if(IsEmptyQueue(&S->pq[l])) continue;
     for(int m = 0; m < NPROC; m++){
@@ -107,6 +116,7 @@ void REMOVE(struct pq *Q, struct proc * x)
 {
   // S->pq[level]->front = mod((S->pq[level]->front + 1), NPROC);
   // *x = S->pq[level]->proc[S->pq[level]->front];
+  if (IsEmptyQueue(Q)) panic("queue underflow");
   int k = mod(Q->front + 1, NPROC);
   while(Q->proc[k]->pid != x->pid){
     k = mod((k + 1), NPROC); 
@@ -377,7 +387,7 @@ exit(void)
   }
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
-  int level = CHECKLEVEL(&active, curproc);
+  int level = GETLEVEL(&active, curproc);
   REMOVE(&active.pq[level], curproc);
   sched();
   panic("zombie exit");
@@ -455,6 +465,8 @@ scheduler(void)
     // Enable interrupts on this processor.
     sti();
 
+    acquire(&ptable.lock);
+
     // Loop over process queue looking for process to run.
     if(IsEmptySet(&active)){
       //if(active.size == 0) { //active.size == 0
@@ -493,7 +505,6 @@ scheduler(void)
       }
     }
 
-    acquire(&ptable.lock);
     for(int l = 0; l < RSDL_LEVELS; l++) {
 
       if(!CHECK(&active.pq[l], &p)) continue; // check for available running process
@@ -634,7 +645,7 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
 
-  int level = CHECKLEVEL(&active, p);
+  int level = GETLEVEL(&active, p);
   REMOVE(&active.pq[level], p);
   p->state = SLEEPING;
   ENQUEUE(&active.pq[level], p);

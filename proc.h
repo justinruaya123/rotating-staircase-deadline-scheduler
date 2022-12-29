@@ -100,4 +100,4 @@ int CHECK(struct pq *Q, struct proc ** x);
 // Check for quantum of the current level
 int QUANTUM(struct pq *Q);
 
-int CHECKLEVEL(struct set *S, struct proc *p);
+int GETLEVEL(struct set *S, struct proc *p);

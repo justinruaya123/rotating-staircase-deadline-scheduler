@@ -16,6 +16,10 @@ uint ticks;
 extern struct set active;
 extern struct set expired;
 
+// custom locks
+extern void acquirelock(void);
+extern void releaselock(void);
+
 // Process queue methods
 extern void InitSet(struct set * set, char * name);
 extern int IsEmptyQueue(struct pq *Q);
@@ -116,13 +120,14 @@ trap(struct trapframe *tf)
   if(myproc() && myproc()->state == RUNNING &&
      tf->trapno == T_IRQ0+IRQ_TIMER){
 
-    int level = CHECKLEVEL(&active, myproc());
+    int level = GETLEVEL(&active, myproc());
 
     --myproc()->quantum_left; // Process-local quanta
     --active.pq[level].quantum_left; // Level quanta
 
     // cprintf("pid %d level %d quantum left: %d\n",myproc()->pid, level,  active.pq[level].quantum_left);
     if(active.pq[level].quantum_left == 0){
+      acquirelock();
       struct proc * pp;
       REMOVE(&active.pq[level], myproc());
       if (level+1 == RSDL_LEVELS){
@@ -139,11 +144,13 @@ trap(struct trapframe *tf)
         }
         ENQUEUE(&active.pq[level+1], myproc());
       }
+      releaselock();
       yield();
     }
     // Syscall Modification
     else if(myproc()->quantum_left == 0){
-      level = CHECKLEVEL(&active, myproc());
+      acquirelock();
+      level = GETLEVEL(&active, myproc());
       REMOVE(&active.pq[level], myproc());
       if (level+1 == RSDL_LEVELS){
         ENQUEUE(&expired.pq[myproc()->starting_level], myproc());
@@ -152,6 +159,7 @@ trap(struct trapframe *tf)
         level++;
         ENQUEUE(&active.pq[level], myproc());
       }
+      releaselock();
       yield();
     }
   }
