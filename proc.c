@@ -22,14 +22,6 @@ int mod(int a, int b)
     return r < 0 ? r + b : r;
 }
 
-void acquirelock(void){
-  acquire(&ptable.lock);
-}
-
-void releaselock(void){
-  release(&ptable.lock);
-}
-
 // Initialize the queue
 void InitQueue(struct pq *Q){
   Q->front = 0;
@@ -42,6 +34,7 @@ void InitSet(struct set * set, char * name){
   safestrcpy(set->name, name, sizeof(set->name));
   for(int l = 0; l < RSDL_LEVELS; l++) {
     InitQueue(&set->pq[l]); // initialize each queue for each set
+    // initlock(set->pq[l].lock, name); // initialize the queue locks
   }
 }
 
@@ -63,34 +56,41 @@ int IsEmptySet(struct set *S){
 // Enqueue incoming process
 void ENQUEUE(struct pq *Q, struct proc * x)
 {
+  // acquire(Q->lock);
   Q->rear = mod((Q->rear + 1), NPROC);
   if(x->quantum_left == 0){
     x->quantum_left = RSDL_PROC_QUANTUM;
   }
   Q->proc[Q->rear] = x;
+  // release(Q->lock);
   // cprintf("EN: %s\n", x->name);
 }
 
 // Dequeue the process queue
 void DEQUEUE(struct pq *Q, struct proc ** x)
 {
+  // acquire(Q->lock);
   if (IsEmptyQueue(Q)) panic("queue underflow");
   Q->front = mod((Q->front + 1), NPROC);
   *x = Q->proc[Q->front];
+  // release(Q->lock);
 }
 
 // Check for running process.
 int CHECK(struct pq *Q, struct proc ** x)
 {
+  // acquire(Q->lock);
   int k = mod(Q->front + 1, NPROC);
   while(k != mod((Q->rear + 1), NPROC)){
     if (Q->proc[k]->state == RUNNABLE){
       *x = Q->proc[k];
       // cprintf("CH: %s\n", Q->proc[k]->name);
+      // release(Q->lock);
       return 1;
     }
     k = mod(k+1, NPROC);
   }
+  // release(Q->lock);
   return 0;
 }
 
@@ -114,6 +114,7 @@ int QUANTUM(struct pq *Q)
 // Remove outgoing process
 void REMOVE(struct pq *Q, struct proc * x)
 {
+  // acquire(Q->lock);
   // S->pq[level]->front = mod((S->pq[level]->front + 1), NPROC);
   // *x = S->pq[level]->proc[S->pq[level]->front];
   if (IsEmptyQueue(Q)) panic("queue underflow");
@@ -128,6 +129,7 @@ void REMOVE(struct pq *Q, struct proc * x)
     k = mod((k + 1), NPROC); 
   }
   Q->rear = mod((Q->rear - 1), NPROC);
+  // release(Q->lock);
 }
 
 static struct proc *initproc;

@@ -127,7 +127,6 @@ trap(struct trapframe *tf)
 
     // cprintf("pid %d level %d quantum left: %d\n",myproc()->pid, level,  active.pq[level].quantum_left);
     if(active.pq[level].quantum_left == 0){
-      acquirelock();
       struct proc * pp;
       REMOVE(&active.pq[level], myproc());
       if (level+1 == RSDL_LEVELS){
@@ -144,12 +143,10 @@ trap(struct trapframe *tf)
         }
         ENQUEUE(&active.pq[level+1], myproc());
       }
-      releaselock();
       yield();
     }
     // Syscall Modification
     else if(myproc()->quantum_left == 0){
-      acquirelock();
       level = GETLEVEL(&active, myproc());
       REMOVE(&active.pq[level], myproc());
       if (level+1 == RSDL_LEVELS){
@@ -159,7 +156,6 @@ trap(struct trapframe *tf)
         level++;
         ENQUEUE(&active.pq[level], myproc());
       }
-      releaselock();
       yield();
     }
   }
