@@ -13,21 +13,12 @@ struct gatedesc idt[256];
 extern uint vectors[];  // in vectors.S: array of 256 entry pointers
 struct spinlock tickslock;
 uint ticks;
-extern struct set active;
-extern struct set expired;
 
-// custom locks
-extern void acquirelock(void);
-extern void releaselock(void);
-
-// Process queue methods
-extern void InitSet(struct set * set, char * name);
-extern int IsEmptyQueue(struct pq *Q);
-extern void ENQUEUE(struct pq *Q, struct proc * x);
-extern void DEQUEUE(struct pq *Q, struct proc ** x);
-extern void REMOVE(struct pq *Q, struct proc * x);
-extern int CHECK(struct pq *Q, struct proc ** x);
-extern int QUANTUM(struct pq *Q);
+// Methods from proc.c necessary before calling yield()
+extern void ALTERLEVEL(struct proc * proc);
+extern void ALTERPROC(struct proc * proc);
+extern int DEC_LQ(struct proc * proc);
+extern int DEC_PQ(struct proc * proc);
 
 void
 tvinit(void)
@@ -120,42 +111,20 @@ trap(struct trapframe *tf)
   if(myproc() && myproc()->state == RUNNING &&
      tf->trapno == T_IRQ0+IRQ_TIMER){
 
-    int level = GETLEVEL(&active, myproc());
+    int proc_q = DEC_PQ(myproc());
+    int level_q = DEC_LQ(myproc());
 
-    --myproc()->quantum_left; // Process-local quanta
-    --active.pq[level].quantum_left; // Level quanta
-
-    // cprintf("pid %d level %d quantum left: %d\n",myproc()->pid, level,  active.pq[level].quantum_left);
-    if(active.pq[level].quantum_left == 0){
-      struct proc * pp;
-      REMOVE(&active.pq[level], myproc());
-      if (level+1 == RSDL_LEVELS){
-        while(!IsEmptyQueue(&active.pq[level])){
-          DEQUEUE(&active.pq[level], &pp);
-          ENQUEUE(&expired.pq[pp->starting_level], pp);
-        }
-        ENQUEUE(&expired.pq[myproc()->starting_level], myproc());
-      }
-      else {
-        while(!IsEmptyQueue(&active.pq[level])){
-          DEQUEUE(&active.pq[level], &pp);
-          ENQUEUE(&active.pq[level+1], pp);
-        }
-        ENQUEUE(&active.pq[level+1], myproc());
-      }
+    // if level quantum is 0, empty the level and enqueue to the next available level with quanta
+    // if no level with quanta is available, enqueue to the expired set based on starting level
+    // this can be simultaneous with process quantum being 0
+    if(level_q == 0){
+      ALTERLEVEL(myproc());
       yield();
     }
-    // Syscall Modification
-    else if(myproc()->quantum_left == 0){
-      level = GETLEVEL(&active, myproc());
-      REMOVE(&active.pq[level], myproc());
-      if (level+1 == RSDL_LEVELS){
-        ENQUEUE(&expired.pq[myproc()->starting_level], myproc());
-      }
-      else {
-        level++;
-        ENQUEUE(&active.pq[level], myproc());
-      }
+    // if process quantum is 0, enqueue the process to the next priority level
+    // if there is no available next priority level, enqueue to the expired set based on starting level
+    else if(proc_q == 0){
+      ALTERPROC(myproc());
       yield();
     }
   }

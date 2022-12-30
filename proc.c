@@ -12,6 +12,23 @@ struct {
   struct proc proc[NPROC];
 } ptable;
 
+// Process queue struct
+struct pq
+{
+  struct spinlock lock;
+  int front;
+  int rear;
+  int quantum_left;
+  struct proc * proc[NPROC];
+};
+
+// Struct set for ACTIVE and EXPIRED sets
+struct set
+{
+  char name[16];
+  struct pq pq[RSDL_LEVELS];
+};
+
 struct set active;
 struct set expired;
 
@@ -20,6 +37,24 @@ int mod(int a, int b)
 {
     int r = a % b;
     return r < 0 ? r + b : r;
+}
+
+// Check for running process.
+int CHECK(struct pq *Q, struct proc ** x)
+{
+  // acquire(&Q->lock);
+  int k = mod(Q->front + 1, NPROC);
+  while(k != mod((Q->rear + 1), NPROC)){
+    if (Q->proc[k]->state == RUNNABLE){
+      *x = Q->proc[k];
+      // cprintf("CH: %s\n", Q->proc[k]->name);
+      // release(&Q->lock);
+      return 1;
+    }
+    k = mod(k+1, NPROC);
+  }
+  // release(&Q->lock);
+  return 0;
 }
 
 // Initialize the queue
@@ -34,7 +69,7 @@ void InitSet(struct set * set, char * name){
   safestrcpy(set->name, name, sizeof(set->name));
   for(int l = 0; l < RSDL_LEVELS; l++) {
     InitQueue(&set->pq[l]); // initialize each queue for each set
-    // initlock(set->pq[l].lock, name); // initialize the queue locks
+    initlock(&set->pq[l].lock, name); // initialize lock for each queue
   }
 }
 
@@ -53,83 +88,128 @@ int IsEmptySet(struct set *S){
   return 1;
 }
 
-// Enqueue incoming process
+// Enqueue incoming process. This must be "atomic" so mutex lock for the queue is necessary.
 void ENQUEUE(struct pq *Q, struct proc * x)
 {
-  // acquire(Q->lock);
+  // acquire(&Q->lock);
   Q->rear = mod((Q->rear + 1), NPROC);
   if(x->quantum_left == 0){
     x->quantum_left = RSDL_PROC_QUANTUM;
   }
   Q->proc[Q->rear] = x;
-  // release(Q->lock);
-  // cprintf("EN: %s\n", x->name);
+  // release(&Q->lock);
+  // cprintf("EN: [%d]%s at %d\n", x->pid, x->name, Q->rear);
 }
 
-// Dequeue the process queue
+// Dequeue the process queue. This must be "atomic" so mutex lock for the queue is necessary.
 void DEQUEUE(struct pq *Q, struct proc ** x)
 {
-  // acquire(Q->lock);
+  // acquire(&Q->lock);
   if (IsEmptyQueue(Q)) panic("queue underflow");
   Q->front = mod((Q->front + 1), NPROC);
   *x = Q->proc[Q->front];
-  // release(Q->lock);
+  // release(&Q->lock);
+  // cprintf("DE: [%d]%s\n", (*x)->pid, (*x)->name);
 }
 
-// Check for running process.
-int CHECK(struct pq *Q, struct proc ** x)
-{
-  // acquire(Q->lock);
-  int k = mod(Q->front + 1, NPROC);
-  while(k != mod((Q->rear + 1), NPROC)){
-    if (Q->proc[k]->state == RUNNABLE){
-      *x = Q->proc[k];
-      // cprintf("CH: %s\n", Q->proc[k]->name);
-      // release(Q->lock);
-      return 1;
-    }
-    k = mod(k+1, NPROC);
-  }
-  // release(Q->lock);
-  return 0;
-}
-
-int GETLEVEL(struct set *S, struct proc *p){
+// Returns the level of the process in the active set.
+int GETLEVEL(struct proc *p){
   for(int l = 0; l < RSDL_LEVELS; l++) {
-    if(IsEmptyQueue(&S->pq[l])) continue;
+    if(IsEmptyQueue(&active.pq[l])) continue;
     for(int m = 0; m < NPROC; m++){
-      if(S->pq[l].proc[m]->pid == p->pid) return l;
+      // acquire(&active.pq[l].lock);
+      if(active.pq[l].proc[m]->pid == p->pid){
+        // release(&active.pq[l].lock);
+        return l;
+      }
+      // release(&active.pq[l].lock);
     }
   }
-  return -1; // the process should be in the other set
+  return -1; // the process should be in the expired set?
 }
 
-// Check for quantum of the current level
+// Check for the quantum of the current level
 int QUANTUM(struct pq *Q)
 {
-  if (Q->quantum_left != 0) return 1;
+  // acquire(&Q->lock);
+  if (Q->quantum_left != 0){
+    return 1;
+  }
+  // release(&Q->lock);
   return 0;
 }
 
 // Remove outgoing process
 void REMOVE(struct pq *Q, struct proc * x)
 {
-  // acquire(Q->lock);
-  // S->pq[level]->front = mod((S->pq[level]->front + 1), NPROC);
-  // *x = S->pq[level]->proc[S->pq[level]->front];
-  if (IsEmptyQueue(Q)) panic("queue underflow");
+  // acquire(&Q->lock);
   int k = mod(Q->front + 1, NPROC);
   while(Q->proc[k]->pid != x->pid){
     k = mod((k + 1), NPROC); 
   }
   // pid found
-  // cprintf("RE: %s\n", S->pq[level]->proc[k]->name);
   while(k != mod(Q->rear + 1, NPROC)){
     Q->proc[k] = Q->proc[mod((k + 1), NPROC)];
     k = mod((k + 1), NPROC); 
   }
-  Q->rear = mod((Q->rear - 1), NPROC);
-  // release(Q->lock);
+  Q->rear = mod((Q->rear-1), NPROC);
+  // release(&Q->lock);
+  // cprintf("RE: [%d]%s\n", x->pid, x->name);
+}
+
+// Find next available level greater than the current process level
+// in the active set for enqueue. Returns the value of RSDL_LEVELS
+// if not found.
+int NEXTLEVEL(int curr_level, struct proc * x){
+  for(int l = curr_level+1; l < RSDL_LEVELS; l++) {
+    if (active.pq[l].quantum_left != 0){
+      return l;
+    }
+  }
+  return RSDL_LEVELS;
+}
+
+// trap.c functions for process queue
+// Empties the current level and enqueue to the next available level
+void ALTERLEVEL(struct proc * proc){
+  struct proc * pp; // pointer placeholder
+  int level = GETLEVEL(proc);
+  int nextlevel = NEXTLEVEL(level, proc); // find the next available level for the dequeued process
+  REMOVE(&active.pq[level], proc); // remove first the active process
+  if(nextlevel != RSDL_LEVELS){
+    while(!IsEmptyQueue(&active.pq[level])){
+      DEQUEUE(&active.pq[level], &pp);
+      ENQUEUE(&active.pq[nextlevel], pp);
+    }
+    ENQUEUE(&active.pq[nextlevel], proc);
+    return;
+  }
+  while(!IsEmptyQueue(&active.pq[level])){
+    DEQUEUE(&active.pq[level], &pp);
+    ENQUEUE(&expired.pq[pp->starting_level], pp);
+  }
+  ENQUEUE(&expired.pq[proc->starting_level], proc);
+  return;
+}
+
+// Dequeues the process from the current level and enqueue to the next available level
+void ALTERPROC(struct proc * proc){
+  int level = GETLEVEL(proc);
+  int nextlevel = NEXTLEVEL(level, proc); // find the next available level for the dequeued process
+  REMOVE(&active.pq[level], proc);
+  if(nextlevel != RSDL_LEVELS) ENQUEUE(&active.pq[nextlevel], proc);
+  else ENQUEUE(&expired.pq[proc->starting_level], proc);
+}
+
+// Decrement and return process quantum.
+int DEC_PQ(struct proc * proc){
+  return --proc->quantum_left; // Process-local quanta
+}
+
+// Decrement and return level quantum of a process.
+// Only happens in the active set.
+int DEC_LQ(struct proc * proc){
+  return --active.pq[GETLEVEL(proc)].quantum_left; // Level quanta
 }
 
 static struct proc *initproc;
@@ -358,6 +438,9 @@ exit(void)
   struct proc *p;
   int fd;
 
+  int level = GETLEVEL(curproc);
+  REMOVE(&active.pq[level], curproc);
+
   if(curproc == initproc)
     panic("init exiting");
 
@@ -389,8 +472,6 @@ exit(void)
   }
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
-  int level = GETLEVEL(&active, curproc);
-  REMOVE(&active.pq[level], curproc);
   sched();
   panic("zombie exit");
 }
@@ -507,10 +588,9 @@ scheduler(void)
       }
     }
 
-    for(int l = 0; l < RSDL_LEVELS; l++) {
-
-      if(!CHECK(&active.pq[l], &p)) continue; // check for available running process
+    for(int l = 0; l < RSDL_LEVELS; l++) { // run processes by priority
       if(!QUANTUM(&active.pq[l])) continue; // check for level quanta
+      if(!CHECK(&active.pq[l], &p)) continue; // check for available running process
 
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
@@ -520,8 +600,8 @@ scheduler(void)
       p->state = RUNNING;
 
       // Syscall modification
-      if (1) { // schedlog_active
-        if (0) { // ticks > schedlog_lasttick
+      if (schedlog_active) { // schedlog_active
+        if (ticks > schedlog_lasttick) { // ticks > schedlog_lasttick
           schedlog_active = 0;
         } else {
           struct proc *pp;
@@ -647,7 +727,7 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
 
-  int level = GETLEVEL(&active, p);
+  int level = GETLEVEL(p);
   REMOVE(&active.pq[level], p);
   p->state = SLEEPING;
   ENQUEUE(&active.pq[level], p);
