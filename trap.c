@@ -111,8 +111,8 @@ trap(struct trapframe *tf)
   if(myproc() && myproc()->state == RUNNING &&
      tf->trapno == T_IRQ0+IRQ_TIMER){
 
-    int proc_q = DEC_PQ(myproc());
-    int level_q = DEC_LQ(myproc());
+    int proc_q = DEC_PQ(myproc()); // decrease process quanta
+    int level_q = DEC_LQ(myproc()); // decrease level quanta -- must be simultaneous with DEC_PQ
 
     // if level quantum is 0, empty the level and enqueue to the next available level with quanta
     // if no level with quanta is available, enqueue to the expired set based on starting level
