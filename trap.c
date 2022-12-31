@@ -116,11 +116,13 @@ trap(struct trapframe *tf)
     // if no level with quanta is available, enqueue to the expired set based on starting level
     // this can be simultaneous with process quantum being 0
     if(level_q == 0){
+      ALTERLEVEL();
       yield();
     }
     // if process quantum is 0, enqueue the process to the next priority level
     // if there is no available next priority level, enqueue to the expired set based on starting level
     else if(proc_q == 0){
+      ALTERPROC();
       yield();
     }
   }

@@ -62,5 +62,8 @@ struct proc { // DONE Add PCB states for schedlog (quantum left)
 //   expandable heap
 
 // Methods from proc.c necessary before calling yield()
+
 int DEC_LQ(void);
 int DEC_PQ(void);
+void ALTERLEVEL(void);
+void ALTERPROC(void);
