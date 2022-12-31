@@ -186,34 +186,34 @@ int NEXTLEVEL(int curr_level, struct proc * x){
 }
 
 // Empties the current level and enqueue to the next available level
-void ALTERLEVEL(void){
+void ALTERLEVEL(struct proc * proc){
   struct proc * pp; // pointer placeholder
-  int level = GETLEVEL(myproc());
-  int nextlevel = NEXTLEVEL(level, myproc()); // find the next available level for the dequeued process
-  REMOVE(&active, level, myproc()); // remove first the active process
+  int level = GETLEVEL(proc);
+  int nextlevel = NEXTLEVEL(level, proc); // find the next available level for the dequeued process
+  REMOVE(&active, level, proc); // remove first the active process
   if(nextlevel != RSDL_LEVELS){
     while(!IsEmptyQueue(&active.pq[level])){
       DEQUEUE(&active, level, &pp);
       ENQUEUE(&active, nextlevel, pp);
     }
-    ENQUEUE(&active, nextlevel, myproc());
+    ENQUEUE(&active, nextlevel, proc);
     return;
   }
   while(!IsEmptyQueue(&active.pq[level])){
     DEQUEUE(&active, level, &pp);
     ENQUEUE(&expired, pp->starting_level, pp);
   }
-  ENQUEUE(&expired, myproc()->starting_level, myproc());
+  ENQUEUE(&expired, proc->starting_level, proc);
   return;
 }
 
 // Dequeues the process from the current level and enqueue to the next available level
-void ALTERPROC(void){
-  int level = GETLEVEL(myproc());
-  int nextlevel = NEXTLEVEL(level, myproc()); // find the next available level for the dequeued process
-  REMOVE(&active, level, myproc());
-  if(nextlevel != RSDL_LEVELS) ENQUEUE(&active, nextlevel, myproc());
-  else ENQUEUE(&expired, myproc()->starting_level, myproc());
+void ALTERPROC(struct proc * proc){
+  int level = GETLEVEL(proc);
+  int nextlevel = NEXTLEVEL(level, proc); // find the next available level for the dequeued process
+  REMOVE(&active, level, proc);
+  if(nextlevel != RSDL_LEVELS) ENQUEUE(&active, nextlevel, proc);
+  else ENQUEUE(&expired, proc->starting_level, proc);
 }
 
 // Decrement and return the process quantum.
@@ -690,6 +690,8 @@ void
 yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
+  if (active.pq[GETLEVEL(myproc())].quantum_left == 0) ALTERLEVEL(myproc());
+  else ALTERPROC(myproc());
   myproc()->state = RUNNABLE;
   sched();
   release(&ptable.lock);
