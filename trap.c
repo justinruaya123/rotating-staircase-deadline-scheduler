@@ -15,10 +15,10 @@ struct spinlock tickslock;
 uint ticks;
 
 // Methods from proc.c necessary before calling yield()
-extern void ALTERLEVEL(struct proc * proc);
-extern void ALTERPROC(struct proc * proc);
-extern int DEC_LQ(struct proc * proc);
-extern int DEC_PQ(struct proc * proc);
+extern void ALTERLEVEL(void);
+extern void ALTERPROC(void);
+extern int DEC_LQ(void);
+extern int DEC_PQ(void);
 
 void
 tvinit(void)
@@ -111,20 +111,20 @@ trap(struct trapframe *tf)
   if(myproc() && myproc()->state == RUNNING &&
      tf->trapno == T_IRQ0+IRQ_TIMER){
 
-    int proc_q = DEC_PQ(myproc()); // decrease process quanta
-    int level_q = DEC_LQ(myproc()); // decrease level quanta -- must be simultaneous with DEC_PQ
+    int proc_q = DEC_PQ(); // decrease process quanta
+    int level_q = DEC_LQ(); // decrease level quanta -- must be simultaneous with DEC_PQ
 
     // if level quantum is 0, empty the level and enqueue to the next available level with quanta
     // if no level with quanta is available, enqueue to the expired set based on starting level
     // this can be simultaneous with process quantum being 0
     if(level_q == 0){
-      ALTERLEVEL(myproc());
+      ALTERLEVEL();
       yield();
     }
     // if process quantum is 0, enqueue the process to the next priority level
     // if there is no available next priority level, enqueue to the expired set based on starting level
     else if(proc_q == 0){
-      ALTERPROC(myproc());
+      ALTERPROC();
       yield();
     }
   }
