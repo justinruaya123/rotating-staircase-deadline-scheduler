@@ -24,12 +24,17 @@ struct pq
 // Struct set for ACTIVE and EXPIRED sets
 struct set
 {
+  struct spinlock lock;
   char name[16];
   struct pq pq[RSDL_LEVELS];
 };
 
+// active and expired sets
 struct set active;
 struct set expired;
+
+// set up temporary set for swapping
+struct set temp;
 
 //======================================================================
 //
@@ -55,6 +60,7 @@ void InitQueue(struct pq *Q){
 
 // Initialize the active and expired sets using this function
 void InitSet(struct set *S, char * name){
+  initlock(&S->lock, name);
   safestrcpy(S->name, name, sizeof(S->name));
   for(int l = 0; l < RSDL_LEVELS; l++) {
     InitQueue(&S->pq[l]);
@@ -73,10 +79,10 @@ int IsEmptyQueue(struct pq *Q)
 // Enqueue incoming process
 void ENQUEUE(struct pq *Q, struct proc * x)
 {
-  Q->rear = mod((Q->rear + 1), NPROC);
   if(x->quantum_left == 0){
     x->quantum_left = RSDL_PROC_QUANTUM;
   }
+  Q->rear = mod((Q->rear + 1), NPROC);
   Q->proc[Q->rear] = x;
   // cprintf("EN: [%d]%s at %d\n", x->pid, x->name, Q->rear);
 }
@@ -338,6 +344,7 @@ userinit(void)
 
   InitSet(&active, "active");
   InitSet(&expired, "expired");
+  InitSet(&temp, "temp");
 
   p = allocproc();
   
@@ -555,8 +562,11 @@ void
 scheduler(void)
 {
   struct proc *p;
+  struct proc *pp;
+  int k;
   struct cpu *c = mycpu();
   c->proc = 0;
+  int swap;
   
   for(;;){
     // Enable interrupts on this processor.
@@ -564,47 +574,12 @@ scheduler(void)
 
     acquire(&ptable.lock);
 
-    // Loop over process queue looking for process to run.
-    if(IsEmptySet(&active)){
-      // cprintf("\nperform swap\n\n");
-
-      // refresh quanta for active and expired sets
-      for(int l = 0; l < RSDL_LEVELS; l++) {
-        active.pq[l].quantum_left = RSDL_LEVEL_QUANTUM;
-        expired.pq[l].quantum_left = RSDL_LEVEL_QUANTUM;
-      }
-
-      // set up temporary set for swapping
-      struct set temp;
-      struct proc *pp;
-      InitSet(&temp, "temp");
-      // empty active set first before swap, then enqueue into temp
-      for(int l = 0; l < RSDL_LEVELS; l++) {
-        while(!IsEmptyQueue(&active.pq[l])){
-          DEQUEUE(&active.pq[l], &pp);
-          ENQUEUE(&temp.pq[l], pp);
-        }
-      }
-      // empty expired set but put it to active
-      for(int l = 0; l < RSDL_LEVELS; l++) {
-        while(!IsEmptyQueue(&expired.pq[l])){
-          DEQUEUE(&expired.pq[l], &pp);
-          ENQUEUE(&active.pq[l], pp);
-        }
-      }
-      // if temp (old active set) is nonempty, enqueue the elements into expired set based on their starting levels
-      for(int l = 0; l < RSDL_LEVELS; l++) {
-        while(!IsEmptyQueue(&temp.pq[l])){
-          DEQUEUE(&temp.pq[l], &pp);
-          ENQUEUE(&expired.pq[pp->starting_level], pp);
-        }
-      }
-    }
-
     for(int l = 0; l < RSDL_LEVELS; l++) { // run processes by priority
 
       if(!QUANTUM(&active.pq[l])) continue; // check for level quanta
       if(!CHECK(&active.pq[l], &p)) continue; // check for available running process
+
+      swap = 0; // disable swapping
 
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
@@ -618,8 +593,6 @@ scheduler(void)
         if (ticks > schedlog_lasttick) { // ticks > schedlog_lasttick
           schedlog_active = 0;
         } else {
-          struct proc *pp;
-          int k;
           // Schedlog for active set, but with levels
           for(int l = 0; l < RSDL_LEVELS; l++) {
             cprintf("%d|%s|%d(%d)", ticks, active.name, l, active.pq[l].quantum_left); // <tick>|<set>|<level>(<quantum left>) for phase 4
@@ -654,6 +627,41 @@ scheduler(void)
       c->proc = 0;
       break;
     }
+
+    // Loop over process queue looking for process to run.
+    if(swap){
+      // cprintf("\nperform swap\n\n");
+
+      // refresh quanta for active and expired sets
+      for(int l = 0; l < RSDL_LEVELS; l++) {
+        active.pq[l].quantum_left = RSDL_LEVEL_QUANTUM;
+        expired.pq[l].quantum_left = RSDL_LEVEL_QUANTUM;
+      }
+
+      // empty active set first before swap, then enqueue into temp
+      for(int l = 0; l < RSDL_LEVELS; l++) {
+        while(!IsEmptyQueue(&active.pq[l])){
+          DEQUEUE(&active.pq[l], &pp);
+          ENQUEUE(&temp.pq[l], pp);
+        }
+      }
+      // empty expired set but put it to active
+      for(int l = 0; l < RSDL_LEVELS; l++) {
+        while(!IsEmptyQueue(&expired.pq[l])){
+          DEQUEUE(&expired.pq[l], &pp);
+          ENQUEUE(&active.pq[l], pp);
+        }
+      }
+      // if temp (old active set) is nonempty, enqueue the elements into expired set based on their starting levels
+      for(int l = 0; l < RSDL_LEVELS; l++) {
+        while(!IsEmptyQueue(&temp.pq[l])){
+          DEQUEUE(&temp.pq[l], &pp);
+          ENQUEUE(&expired.pq[pp->starting_level], pp);
+        }
+      }
+    }
+    swap = 1;
+
     release(&ptable.lock);
   }
 }
@@ -739,14 +747,15 @@ sleep(void *chan, struct spinlock *lk)
     release(lk);
   }
 
+  // Go to sleep.
+  p->chan = chan;
+  p->state = SLEEPING;
+
   // Re-enqueue the process to sleep
   int level = GETLEVEL(p);
   REMOVE(&active.pq[level], p);
   ENQUEUE(&active.pq[level], p);
 
-  // Go to sleep.
-  p->chan = chan;
-  p->state = SLEEPING;
   sched();
 
   // Tidy up.

@@ -17,6 +17,8 @@ uint ticks;
 // Methods from proc.c necessary before calling yield()
 extern int DEC_LQ(void);
 extern int DEC_PQ(void);
+extern void ALTERLEVEL(void);
+extern void ALTERPROC(void);
 
 void
 tvinit(void)
