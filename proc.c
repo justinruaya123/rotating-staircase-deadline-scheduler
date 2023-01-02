@@ -168,7 +168,7 @@ int IsEmptySet(struct set *S){
 // Find next available level greater than the current process
 // level in the active set for enqueue. Returns the value of
 // RSDL_LEVELS if not found.
-int NEXTLEVEL(int curr_level, struct proc * x){
+int NEXTLEVEL(int curr_level){
   for(int l = curr_level+1; l < RSDL_LEVELS; l++) {
     if (active.pq[l].quantum_left != 0){
       return l;
@@ -179,16 +179,18 @@ int NEXTLEVEL(int curr_level, struct proc * x){
 
 // Empties the current level and enqueue to the next available level
 void ALTERLEVEL(void){
+  acquire(&ptable.lock);
   struct proc * pp; // pointer placeholder
   int level = GETLEVEL(myproc());
-  int nextlevel = NEXTLEVEL(level, myproc()); // find the next available level for the dequeued process
+  int nextlevel = NEXTLEVEL(level); // find the next available level for the dequeued process
   REMOVE(&active.pq[level], myproc()); // remove first the active process
-  if(nextlevel != RSDL_LEVELS){
+  if(nextlevel < RSDL_LEVELS){
     while(!IsEmptyQueue(&active.pq[level])){
       DEQUEUE(&active.pq[level], &pp);
       ENQUEUE(&active.pq[nextlevel], pp);
     }
     ENQUEUE(&active.pq[nextlevel], myproc());
+    release(&ptable.lock);
     return;
   }
   while(!IsEmptyQueue(&active.pq[level])){
@@ -196,19 +198,23 @@ void ALTERLEVEL(void){
     ENQUEUE(&expired.pq[pp->starting_level], pp);
   }
   ENQUEUE(&expired.pq[myproc()->starting_level], myproc());
+  release(&ptable.lock);
   return;
 }
 
 // Dequeues the process from the current level and enqueue to the next available level
 void ALTERPROC(void){
+  acquire(&ptable.lock);
   int level = GETLEVEL(myproc());
-  int nextlevel = NEXTLEVEL(level, myproc()); // find the next available level for the dequeued process
+  int nextlevel = NEXTLEVEL(level); // find the next available level for the dequeued process
   REMOVE(&active.pq[level], myproc());
-  if(nextlevel != RSDL_LEVELS){
+  if(nextlevel < RSDL_LEVELS){
     ENQUEUE(&active.pq[nextlevel], myproc());
+    release(&ptable.lock);
     return;
   }
   ENQUEUE(&expired.pq[myproc()->starting_level], myproc());
+  release(&ptable.lock);
   return;
 }
 
@@ -566,7 +572,7 @@ scheduler(void)
   int k;
   struct cpu *c = mycpu();
   c->proc = 0;
-  int swap;
+  int swap = 1;
   
   for(;;){
     // Enable interrupts on this processor.
@@ -576,7 +582,6 @@ scheduler(void)
 
     for(int l = 0; l < RSDL_LEVELS; l++) { // run processes by priority
 
-      if(!QUANTUM(&active.pq[l])) continue; // check for level quanta
       if(!CHECK(&active.pq[l], &p)) continue; // check for available running process
 
       swap = 0; // disable swapping
@@ -652,11 +657,11 @@ scheduler(void)
           ENQUEUE(&active.pq[l], pp);
         }
       }
-      // if temp (old active set) is nonempty, enqueue the elements into expired set based on their starting levels
+      // if temp (old active set) is nonempty, enqueue the elements into active set based on their starting levels
       for(int l = 0; l < RSDL_LEVELS; l++) {
         while(!IsEmptyQueue(&temp.pq[l])){
           DEQUEUE(&temp.pq[l], &pp);
-          ENQUEUE(&expired.pq[pp->starting_level], pp);
+          ENQUEUE(&active.pq[pp->starting_level], pp);
         }
       }
     }
