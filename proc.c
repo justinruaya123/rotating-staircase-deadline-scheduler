@@ -407,7 +407,7 @@ growproc(int n)
 // Sets up stack to return as if from system call.
 // Caller must set state of returned proc to RUNNABLE.
 int
-fork(void)
+priofork(int n)
 {
   int i, pid;
   struct proc *np;
@@ -444,12 +444,17 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
-  np->starting_level = RSDL_STARTING_LEVEL; // TODO fix this on priofork
+  np->starting_level = n;
   ENQUEUE(&active.pq[np->starting_level], np, RSDL_PROC_QUANTUM);
 
   release(&ptable.lock);
 
   return pid;
+}
+
+int
+fork(void) {
+  return priofork(RSDL_STARTING_LEVEL);
 }
 
 // Exit the current process.  Does not return.
