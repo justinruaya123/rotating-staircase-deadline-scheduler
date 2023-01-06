@@ -3,6 +3,10 @@
         "typeinfo": "c",
         "memlayout.h": "c",
         "proc.h": "c",
-        "mmu.h": "c"
+        "mmu.h": "c",
+        "defs.h": "c",
+        "param.h": "c",
+        "rsdl.h": "c",
+        "concepts": "c"
     }
 }

@@ -14,6 +14,12 @@ extern uint vectors[];  // in vectors.S: array of 256 entry pointers
 struct spinlock tickslock;
 uint ticks;
 
+// Methods from proc.c necessary before calling yield()
+extern int DEC_LQ(void);
+extern int DEC_PQ(void);
+extern void ALTERLEVEL(void);
+extern void ALTERPROC(void);
+
 void
 tvinit(void)
 {
@@ -103,12 +109,25 @@ trap(struct trapframe *tf)
   // Force process to give up CPU on clock tick.
   // If interrupts were on while locks held, would need to check nlock.
   if(myproc() && myproc()->state == RUNNING &&
-     tf->trapno == T_IRQ0+IRQ_TIMER)
-    
-    // Syscall Modification
-    if(--myproc()->quantum_left == 0){
+     tf->trapno == T_IRQ0+IRQ_TIMER){
+
+    int proc_q = DEC_PQ(); // decrease process quanta
+    int level_q = DEC_LQ(); // decrease level quanta -- must be simultaneous with DEC_PQ
+
+    // if level quantum is 0, empty the level and enqueue to the next available level with quanta
+    // if no level with quanta is available, enqueue to the expired set based on starting level
+    // this can be simultaneous with process quantum being 0
+    if(level_q == 0){
+      ALTERLEVEL();
       yield();
     }
+    // if process quantum is 0, enqueue the process to the next priority level
+    // if there is no available next priority level, enqueue to the expired set based on starting level
+    else if(proc_q == 0){
+      ALTERPROC();
+      yield();
+    }
+  }
 
   // Check if the process has been killed since we yielded
   if(myproc() && myproc()->killed && (tf->cs&3) == DPL_USER)
