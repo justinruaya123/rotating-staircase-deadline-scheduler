@@ -77,11 +77,9 @@ int IsEmptyQueue(struct pq *Q)
 }
 
 // Enqueue incoming process
-void ENQUEUE(struct pq *Q, struct proc * x)
+void ENQUEUE(struct pq *Q, struct proc * x, int quantum)
 {
-  if(x->quantum_left == 0){
-    x->quantum_left = RSDL_PROC_QUANTUM;
-  }
+  x->quantum_left = quantum;
   Q->rear = mod((Q->rear + 1), NPROC);
   Q->proc[Q->rear] = x;
   // cprintf("EN: [%d]%s at %d\n", x->pid, x->name, Q->rear);
@@ -187,17 +185,17 @@ void ALTERLEVEL(void){
   if(nextlevel < RSDL_LEVELS){
     while(!IsEmptyQueue(&active.pq[level])){
       DEQUEUE(&active.pq[level], &pp);
-      ENQUEUE(&active.pq[nextlevel], pp);
+      ENQUEUE(&active.pq[nextlevel], pp, RSDL_PROC_QUANTUM);
     }
-    ENQUEUE(&active.pq[nextlevel], myproc());
+    ENQUEUE(&active.pq[nextlevel], myproc(), RSDL_PROC_QUANTUM);
     release(&ptable.lock);
     return;
   }
   while(!IsEmptyQueue(&active.pq[level])){
     DEQUEUE(&active.pq[level], &pp);
-    ENQUEUE(&expired.pq[pp->starting_level], pp);
+    ENQUEUE(&expired.pq[pp->starting_level], pp, RSDL_PROC_QUANTUM);
   }
-  ENQUEUE(&expired.pq[myproc()->starting_level], myproc());
+  ENQUEUE(&expired.pq[myproc()->starting_level], myproc(), RSDL_PROC_QUANTUM);
   release(&ptable.lock);
   return;
 }
@@ -209,11 +207,11 @@ void ALTERPROC(void){
   int nextlevel = NEXTLEVEL(level); // find the next available level for the dequeued process
   REMOVE(&active.pq[level], myproc());
   if(nextlevel < RSDL_LEVELS){
-    ENQUEUE(&active.pq[nextlevel], myproc());
+    ENQUEUE(&active.pq[nextlevel], myproc(), RSDL_PROC_QUANTUM);
     release(&ptable.lock);
     return;
   }
-  ENQUEUE(&expired.pq[myproc()->starting_level], myproc());
+  ENQUEUE(&expired.pq[myproc()->starting_level], myproc(), RSDL_PROC_QUANTUM);
   release(&ptable.lock);
   return;
 }
@@ -379,7 +377,7 @@ userinit(void)
 
   p->state = RUNNABLE;
   p->starting_level = RSDL_STARTING_LEVEL; // TODO fix this on priofork
-  ENQUEUE(&active.pq[p->starting_level], p);
+  ENQUEUE(&active.pq[p->starting_level], p, RSDL_PROC_QUANTUM);
 
   release(&ptable.lock);
 }
@@ -447,7 +445,7 @@ fork(void)
 
   np->state = RUNNABLE;
   np->starting_level = RSDL_STARTING_LEVEL; // TODO fix this on priofork
-  ENQUEUE(&active.pq[np->starting_level], np);
+  ENQUEUE(&active.pq[np->starting_level], np, RSDL_PROC_QUANTUM);
 
   release(&ptable.lock);
 
@@ -647,21 +645,21 @@ scheduler(void)
       for(int l = 0; l < RSDL_LEVELS; l++) {
         while(!IsEmptyQueue(&active.pq[l])){
           DEQUEUE(&active.pq[l], &pp);
-          ENQUEUE(&temp.pq[l], pp);
+          ENQUEUE(&temp.pq[l], pp, RSDL_PROC_QUANTUM);
         }
       }
       // empty expired set but put it to active
       for(int l = 0; l < RSDL_LEVELS; l++) {
         while(!IsEmptyQueue(&expired.pq[l])){
           DEQUEUE(&expired.pq[l], &pp);
-          ENQUEUE(&active.pq[l], pp);
+          ENQUEUE(&active.pq[l], pp, RSDL_PROC_QUANTUM);
         }
       }
       // if temp (old active set) is nonempty, enqueue the elements into active set based on their starting levels
       for(int l = 0; l < RSDL_LEVELS; l++) {
         while(!IsEmptyQueue(&temp.pq[l])){
           DEQUEUE(&temp.pq[l], &pp);
-          ENQUEUE(&active.pq[pp->starting_level], pp);
+          ENQUEUE(&active.pq[pp->starting_level], pp, RSDL_PROC_QUANTUM);
         }
       }
     }
@@ -759,7 +757,7 @@ sleep(void *chan, struct spinlock *lk)
   // Re-enqueue the process to sleep
   int level = GETLEVEL(p);
   REMOVE(&active.pq[level], p);
-  ENQUEUE(&active.pq[level], p);
+  ENQUEUE(&active.pq[level], p, p->quantum_left);
 
   sched();
 
