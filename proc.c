@@ -24,7 +24,6 @@ struct pq
 // Struct set for ACTIVE and EXPIRED sets
 struct set
 {
-  struct spinlock lock;
   char name[16];
   struct pq pq[RSDL_LEVELS];
 };
@@ -60,7 +59,6 @@ void InitQueue(struct pq *Q){
 
 // Initialize the active and expired sets using this function
 void InitSet(struct set *S, char * name){
-  initlock(&S->lock, name);
   safestrcpy(S->name, name, sizeof(S->name));
   for(int l = 0; l < RSDL_LEVELS; l++) {
     InitQueue(&S->pq[l]);
