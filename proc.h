@@ -50,7 +50,7 @@ struct proc { // DONE Add PCB states for schedlog (quantum left)
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 
-  // Phase 3 Modification
+  // Phase 5 Modification
   int quantum_left;            // Quantum left for the process
   int starting_level;          // Original priority level for the process
 };

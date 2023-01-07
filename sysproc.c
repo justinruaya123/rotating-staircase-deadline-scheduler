@@ -113,3 +113,12 @@ int sys_schedlog(void) { // Syscall modification
   return 0;
 }
 
+int sys_priofork(void) { // Syscall modification
+  int n;
+
+  if(argint(0, &n) < 0)
+    return -1;
+
+  return priofork(n);
+}
+
