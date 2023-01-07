@@ -107,6 +107,7 @@ trap(struct trapframe *tf)
     
     // Syscall Modification
     if(--myproc()->quantum_left == 0){
+      ALTERPROC();
       yield();
     }
 

@@ -53,8 +53,7 @@ struct proc { // DONE Add PCB states for schedlog (quantum left)
 
   // Phase 3 Modification
   int quantum_left;            // Quantum left for the process
-  int level;                   // Priority level for the process
-  enum procset set;            // Check whether the process belongs to NONE, EXPIRED, or ACTIVE
+  int starting_level;
 };
 
 // Process memory is laid out contiguously, low addresses first:
@@ -62,3 +61,5 @@ struct proc { // DONE Add PCB states for schedlog (quantum left)
 //   original data and bss
 //   fixed-size stack
 //   expandable heap
+
+void ALTERPROC(void);
