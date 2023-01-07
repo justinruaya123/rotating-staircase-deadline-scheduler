@@ -199,9 +199,9 @@ void ALTERLEVEL(void){
   }
   while(!IsEmptyQueue(&active.pq[level])){
     DEQUEUE(&active.pq[level], &pp);
-    ENQUEUE(&expired.pq[NEXTLEVEL(pp->starting_level)], pp, RSDL_PROC_QUANTUM);
+    ENQUEUE(&expired.pq[pp->starting_level], pp, RSDL_PROC_QUANTUM);
   }
-  ENQUEUE(&expired.pq[NEXTLEVEL(myproc()->starting_level)], myproc(), RSDL_PROC_QUANTUM);
+  ENQUEUE(&expired.pq[myproc()->starting_level], myproc(), RSDL_PROC_QUANTUM);
   release(&ptable.lock);
   return;
 }
@@ -217,7 +217,7 @@ void ALTERPROC(void){
     release(&ptable.lock);
     return;
   }
-  ENQUEUE(&expired.pq[NEXTLEVEL(myproc()->starting_level)], myproc(), RSDL_PROC_QUANTUM);
+  ENQUEUE(&expired.pq[myproc()->starting_level], myproc(), RSDL_PROC_QUANTUM);
   release(&ptable.lock);
   return;
 }
