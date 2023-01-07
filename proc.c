@@ -74,9 +74,17 @@ int IsEmptyQueue(struct pq *Q)
   return(Q->front == Q->rear);
 }
 
+// Check if queue is full
+int IsFullQueue(struct pq *Q)
+{
+  // cprintf("IE: %d\n", Q->front == Q->rear);
+  return(Q->front == mod(Q->rear, NPROC) + 1);
+}
+
 // Enqueue incoming process
 void ENQUEUE(struct pq *Q, struct proc * x, int quantum)
 {
+  if (IsFullQueue(Q)) panic("queue overflow");
   x->quantum_left = quantum;
   Q->rear = mod((Q->rear + 1), NPROC);
   Q->proc[Q->rear] = x;
